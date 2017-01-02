@@ -10,15 +10,28 @@ import (
 const kMaxBlobAxes = 32
 
 type Blob struct {
-	data      *SyncedMemory
-	diff      *SyncedMemory
-	shapeData *SyncedMemory
+	data      []float32
+	diff      []float32
+	shapeData []float32
 	shape     []int
 	count     int
 	capacity  int
 }
 
 func New(num, channels, height, width int) *Blob {
+}
+
+func (blob *Blob) Update() {
+
+}
+
+func (blob *Blob) FromProto(proto *proto.BlobProto, reshape bool) error {
+	if proto.
+
+}
+
+func (blob *Blob) ToProto(proto *proto.BlobProto, writeDiff bool) error {
+
 }
 
 func (blob *Blob) Reshape(shape []int) {
@@ -80,4 +93,20 @@ func (blob *Blob) String() string {
 	buffers.WriteString(fmt.Sprintf("(%d)", blob.count))
 
 	return buffers.String()
+}
+
+func (blob *Blob) Shape() []int {
+	return blob.shape
+}
+
+func (blob *Blob) ShapeOfIndex(index int) int {
+	return blob.shape[index]
+}
+
+func (blob *Blob) AxesNum() int {
+	return len(blob.shape)
+}
+
+func (blob *Blob) Count() int {
+	return blob.count
 }
