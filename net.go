@@ -1,10 +1,11 @@
 package net
 
 import (
-	"github.com/cvley/gocaffe/caffeproto"
+	caffeproto "github.com/cvley/gocaffe/proto"
 	"github.com/golang/protobuf/proto"
 	"io/ioutil"
 	"log"
+//	"fmt"
 	"os"
 )
 
@@ -12,7 +13,8 @@ type Net struct {
 }
 
 func (net *Net) CopyTrainedLayersFromParam(netParam *caffeproto.NetParameter) (*Net, error) {
-
+	log.Println("Ok")
+	return nil, nil
 }
 
 func (net *Net) CopyTrainedLayersFromFile(file string) (*Net, error) {
@@ -25,13 +27,17 @@ func (net *Net) CopyTrainedLayersFromFile(file string) (*Net, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Println(len(b))
 
 	param := &caffeproto.NetParameter{}
 	if err := proto.Unmarshal(b, param); err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("%+v\n", param)
+	for _, layer := range param.GetLayers() {
+		log.Println(layer.GetName(), layer.GetType(), layer.GetBottom(), layer.GetTop())
+		log.Println(layer)
+	}
 
 	return nil, nil
 }

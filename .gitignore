@@ -25,3 +25,5 @@ _testmain.go
 
 .gitignore
 proto/*.go
+imagenet_deploy.prototxt
+imagenet_model
