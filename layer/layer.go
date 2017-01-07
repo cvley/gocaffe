@@ -6,19 +6,25 @@ import (
 	"strings"
 )
 
+var (
+	LayerRegisterer LayerRegistry
+)
+
 type Layer interface{}
 
 type Creator func(LayerParameter) Layer
 
-type LayerRegistry struct {
-	registry map[string]Creator
+type LayerRegistry map[string]Creator
+
+func init() {
+	LayerRegisterer = make(LayerRegistry)
 }
 
 func (r *LayerRegistry) AddCreator(tp string, creator Creator) error {
 	if r.layerExist(tp) {
 		return fmt.Errorf("Layer type %s already registered.")
 	}
-	r.registry[tp] = creator
+	r[tp] = creator
 	return nil
 }
 
@@ -29,13 +35,12 @@ func (r *LayerRegistry) CreateLayer(param *pb.LayerParameter) (Layer, error) {
 		return nil, fmt.Errorf("layer %s not exist", tp)
 	}
 
-	creator := r.registry[tp]
-	return creator(param)
+	return r[tp](param)
 }
 
 func (r *LayerRegistry) LayerTypeList() []string {
 	result := []string{}
-	for name, _ := range r.registry {
+	for name, _ := range r {
 		result = append(result, name)
 	}
 	return result
@@ -47,7 +52,7 @@ func (r *LayerRegistry) LayerTypeListString() string {
 }
 
 func (r *LayerRegistry) layerExist(name string) bool {
-	for k, _ := range r.registry {
+	for k, _ := range r {
 		if k == name {
 			return true
 		}
