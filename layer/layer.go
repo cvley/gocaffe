@@ -4,15 +4,23 @@ import (
 	"fmt"
 	"log"
 	"strings"
+
+	pb "github.com/cvley/proto"
 )
 
 var (
 	LayerRegisterer LayerRegistry
 )
 
-type Layer interface{}
+type Layer interface {
+	SetUp(bottom, top []*Blob)
+	Reshape(bottom, top []*Blob)
+	Forward(bottom, top []*Blob) float64
+	Backward(bottom, top []*Blob, propagateDown []bool)
+	Type() string
+}
 
-type Creator func(LayerParameter) Layer
+type Creator func(*pb.LayerParameter) (Layer, error)
 
 type LayerRegistry map[string]Creator
 
