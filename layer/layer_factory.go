@@ -25,3 +25,21 @@ func GetConvolutionLayer(param *pb.LayerParameter) (Layer, error) {
 
 	return NewConvolutionLayer(param)
 }
+
+func GetPoolLayer(param *pb.LayerParameter) (Layer, error) {
+	poolParam := param.GetPoolingParam()
+	if poolParam == nil {
+		return nil, errors.New("get pooling param fail")
+	}
+
+	engine := poolParam.GetEngine()
+	if engine == pb.Default_PoolingParameter_Engine {
+		engine = pb.PoolingParameter_Engine_CAFFE
+	}
+
+	if engine != pb.PoolingParameter_Engine_CAFFE {
+		return nil, errors.New("pooling parameter engine not implement")
+	}
+
+	return NewPoolingLayer(param)
+}
