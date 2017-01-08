@@ -16,10 +16,10 @@ func GetConvolutionLayer(param *pb.LayerParameter) (Layer, error) {
 
 	engine := convParam.GetEngine()
 	if engine == pb.Default_ConvolutionParameter_Engine {
-		engine = pb.ConvolutionParameter_Engine_CAFFE
+		engine = pb.ConvolutionParameter_CAFFE
 	}
 
-	if engine != pb.ConvolutionParameter_Engine_CAFFE {
+	if engine != pb.ConvolutionParameter_CAFFE {
 		return nil, errors.New("convolution parameter engine not implement")
 	}
 
@@ -34,12 +34,30 @@ func GetPoolLayer(param *pb.LayerParameter) (Layer, error) {
 
 	engine := poolParam.GetEngine()
 	if engine == pb.Default_PoolingParameter_Engine {
-		engine = pb.PoolingParameter_Engine_CAFFE
+		engine = pb.PoolingParameter_CAFFE
 	}
 
-	if engine != pb.PoolingParameter_Engine_CAFFE {
+	if engine != pb.PoolingParameter_CAFFE {
 		return nil, errors.New("pooling parameter engine not implement")
 	}
 
 	return NewPoolingLayer(param)
+}
+
+func GetLRNLayer(param *pb.LayerParameter) (Layer, error) {
+	lrnParam := param.GetLrnParam()
+	if lrnParam == nil {
+		return nil, errors.New("get lrn param fail")
+	}
+
+	engine := lrnParam.GetEngine()
+	if engine == pb.Default_LRNParameter_Engine {
+		engine = pb.LRNParameter_CAFFE
+	}
+
+	if engine != pb.LRNParameter_CAFFE {
+		return nil, errors.New("lrn parameter engine not implement")
+	}
+
+	return NewLRNLayer(param)
 }
