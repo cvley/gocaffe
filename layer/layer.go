@@ -15,7 +15,7 @@ var (
 type Layer interface {
 	SetUp(bottom, top []*Blob)
 	Reshape(bottom, top []*Blob)
-	Forward(bottom, top []*Blob) float64
+	Forward(bottom, top []*Blob)
 	Backward(bottom, top []*Blob, propagateDown []bool)
 	Type() string
 }
