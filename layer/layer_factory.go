@@ -78,3 +78,54 @@ func GetReLULayer(param *pb.LayerParameter) (Layer, error) {
 
 	return NewReLULayer(param)
 }
+
+func GetSigmoidLayer(param *pb.LayerParameter) (Layer, error) {
+	sigParam := param.GetSigmoidParam()
+	if sigParam == nil {
+		return nil, errors.New("get sigmoid param fail")
+	}
+	engine := sigParam.GetEngine()
+	if engine == pb.Default_SigmoidParameter_Engine {
+		engine = pb.SigmoidParameter_CAFFE
+	}
+
+	if engine != pb.SigmoidParameter_CAFFE {
+		return nil, errors.New("sigmoid parameter engine not implement")
+	}
+
+	return NewSigmoidLayer(param)
+}
+
+func GetSoftmaxLayer(param *pb.LayerParameter) (Layer, error) {
+	softParam := param.GetSoftmaxParam()
+	if softParam == nil {
+		return nil, errors.New("get soft param fail")
+	}
+	engine := softParam.GetEngine()
+	if engine == pb.Default_SoftmaxParameter_Engine {
+		engine = pb.SoftmaxParameter_CAFFE
+	}
+
+	if engine != pb.SoftmaxParameter_CAFFE {
+		return nil, errors.New("soft parameter engine not implement")
+	}
+
+	return NewSoftmaxLayer(param)
+}
+
+func GetTanHLayer(param *pb.LayerParameter) (Layer, error) {
+	tanhParam := param.GetTanhParam()
+	if tanhParam == nil {
+		return nil, errors.New("get tanh param fail")
+	}
+	engine := tanhParam.GetEngine()
+	if engine == pb.Default_TanHParameter_Engine {
+		engine = pb.TanHParameter_CAFFE
+	}
+
+	if engine != pb.TanHParameter_CAFFE {
+		return nil, errors.New("tanh parameter engine not implement")
+	}
+
+	return NewTanHLayer(param)
+}
