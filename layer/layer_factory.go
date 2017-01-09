@@ -61,3 +61,20 @@ func GetLRNLayer(param *pb.LayerParameter) (Layer, error) {
 
 	return NewLRNLayer(param)
 }
+
+func GetReLULayer(param *pb.LayerParameter) (Layer, error) {
+	reluParam := param.GetReluParam()
+	if reluParam == nil {
+		return nil, errors.New("get relu param fail")
+	}
+	engine := reluParam.GetEngine()
+	if engine == pb.Default_ReLUParameter_Engine {
+		engine = pb.ReLUParameter_CAFFE
+	}
+
+	if engine != pb.ReLUParameter_CAFFE {
+		return nil, errors.New("relu parameter engine not implement")
+	}
+
+	return NewReLULayer(param)
+}
