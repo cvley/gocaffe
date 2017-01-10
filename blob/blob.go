@@ -3,10 +3,10 @@ package blob
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"math"
 
 	pb "github.com/cvley/gocaffe/proto"
+	"github.com/gonum/blas/blas64"
 )
 
 const kMaxBlobAxes = 32
@@ -23,15 +23,15 @@ type Blob struct {
 }
 
 func New(shape []int32) *Blob {
-	blob := &Blob{
+	b := &Blob{
 		capacity: 0,
 	}
 
-	blob.Reshape(shape)
-	return blob
+	b.Reshape(shape)
+	return b
 }
 
-func (blob *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
+func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) {
 	// get shape
 	if reshape {
 		shape := []int32{}
@@ -46,199 +46,201 @@ func (blob *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 				shape = append(shape, int32(v))
 			}
 		}
-		blob.Reshape(shape)
+		b.Reshape(shape)
 	} else {
-		if !blob.ShapeEquals(other) {
+		if !b.ShapeEquals(other) {
 			panic("shape mismatch (reshape not set)")
 		}
 	}
 
 	// copy data
-	if other.GetData() {
-		if blob.count != len(other.GetData()) {
+	if len(other.GetData()) > 0 {
+		if b.count != len(other.GetData()) {
 			panic("get data fail: count mismatch data length")
 		}
-		blob.FloatData = other.GetData()
+		b.FloatData = other.GetData()
 	} else {
-		if blob.count != len(other.GetDoubleData()) {
+		if b.count != len(other.GetDoubleData()) {
 			panic("get double data fail: count mismatch data length")
 		}
-		blob.DoubleData = other.GetDoubleData()
+		b.DoubleData = other.GetDoubleData()
 	}
 
-	if other.GetDiff() {
-		if blob.count != len(other.GetDiff()) {
+	if len(other.GetDiff()) > 0 {
+		if b.count != len(other.GetDiff()) {
 			panic("get diff fail: count mismatch data length")
 		}
-		blob.FloatDiff = other.GetDiff()
+		b.FloatDiff = other.GetDiff()
 	} else {
-		if blob.count != len(other.GetDoubleDiff()) {
+		if b.count != len(other.GetDoubleDiff()) {
 			panic("get double diff fail: count mismatch data length")
 		}
-		blob.DoubleDiff = other.GetDoubleDiff()
+		b.DoubleDiff = other.GetDoubleDiff()
 	}
 }
 
-func (blob *Blob) ToProto(proto *pb.BlobProto, writeDiff bool) error {
+func (b *Blob) ToProto(proto *pb.BlobProto, writeDiff bool) {
 	shape := []int64{}
-	for _, k := range blob.shape {
+	for _, k := range b.shape {
 		shape = append(shape, int64(k))
 	}
 	proto = &pb.BlobProto{
 		Shape:      &pb.BlobShape{Dim: shape},
-		Diff:       blob.FloatDiff,
-		DoubleData: blob.DoubleData,
-		DoubleDiff: blob.DoubleDiff,
+		Diff:       b.FloatDiff,
+		DoubleData: b.DoubleData,
+		DoubleDiff: b.DoubleDiff,
 	}
-	if blob.FloatData != nil {
-		proto.Data = blob.FloatData
+	if b.FloatData != nil {
+		proto.Data = b.FloatData
 	}
-	if blob.DoubleData != nil {
-		proto.DoubleData = blob.DoubleData
+	if b.DoubleData != nil {
+		proto.DoubleData = b.DoubleData
 	}
 
 	if writeDiff {
-		if blob.FloatDiff != nil {
-			proto.Diff = blob.FloatDiff
+		if b.FloatDiff != nil {
+			proto.Diff = b.FloatDiff
 		}
-		if blob.DoubleDiff != nil {
-			proto.DoubleDiff = blob.DoubleDiff
+		if b.DoubleDiff != nil {
+			proto.DoubleDiff = b.DoubleDiff
 		}
 	}
 }
 
-func (blob *Blob) ShapeEquals(other *pb.BlobProto) bool {
+func (b *Blob) ShapeEquals(other *pb.BlobProto) bool {
 	if other.GetHeight() != 0 || other.GetChannels() != 0 || other.GetNum() != 0 || other.GetWidth() != 0 {
-		return len(blob.shape) <= 4 && blob.legacyShape(-4) == other.GetNum() && blob.legacyShape(-3) == other.GetChannels() && blob.legacyShape(-2) == other.GetHeight() && blob.legacyShape(-1) == other.GetWidth()
+		return len(b.shape) <= 4 && b.legacyShape(-4) == other.GetNum() && b.legacyShape(-3) == other.GetChannels() && b.legacyShape(-2) == other.GetHeight() && b.legacyShape(-1) == other.GetWidth()
 	}
 
 	otherShape := other.GetShape().GetDim()
 	for i, v := range otherShape {
-		if blob.shape[i] != int32(v) {
+		if b.shape[i] != int32(v) {
 			return false
 		}
 	}
 	return true
 }
 
-func (blob *Blob) Reshape(shape []int32) {
+func (b *Blob) Reshape(shape []int32) {
 	if len(shape) > kMaxBlobAxes {
-		panic(fmt.Printf("blob shape dimensions %d larger than %d", len(shape), kMaxBlobAxes))
+		panic("blob shape dimensions larger than max blob axes")
 	}
 
-	blob.count = 1
+	b.count = 1
 
 	// reset size of shape and shapeData
-	blob.shape = make([]int32, len(shape))
-	if blob.shape != nil || blob.shape.Size() < len(shape) {
-		blob.shapeData.Reset(len(shape))
+	b.shape = make([]int32, len(shape))
+	if b.shape != nil || len(b.shape) < len(shape) {
+		b.shapeData = make([]float64, len(shape))
 	}
 
 	for i, v := range shape {
 		if v < 0 {
 			panic("shape value invalid")
 		}
-		if blob.count != 0 {
-			if v > math.MaxInt64/blob.count {
+		if b.count != 0 {
+			if int(v) > math.MaxInt64/b.count {
 				panic("blob size exceeds MaxInt64")
 			}
-			blob.count *= v
-			blob.shape[i] = v
-			blob.shapeData = v
+			b.count *= int(v)
+			b.shape[i] = v
+			b.shapeData = append(b.shapeData, float64(v))
 		}
 	}
 
-	if blob.count > blob.capacity {
-		blob.capacity = blob.count
-		blob.data.Reset(blob.capacity)
-		blob.diff.Reset(blob.capacity)
+	if b.count > b.capacity {
+		b.capacity = b.count
+		b.FloatData = make([]float32, b.capacity)
+		b.FloatDiff = make([]float32, b.capacity)
+		b.DoubleData = make([]float64, b.capacity)
+		b.DoubleDiff = make([]float64, b.capacity)
 	}
 }
 
-func (blob *Blob) ReshapeFromBlobShape(blobShape *pb.BlobShape) {
+func (b *Blob) ReshapeFromBlobShape(blobShape *pb.BlobShape) {
 	if (len(blobShape.GetDim())) > kMaxBlobAxes {
-		panic(fmt.Printf("blob shape dimensions %d larger than %d", len(blobShape.GetDim(), kMaxBlobAxes)))
+		panic("blob shape dimensions larger than max blob axes")
 	}
 
-	shape := make([]int, len(blobShape.GetDim()))
+	shape := make([]int32, len(blobShape.GetDim()))
 	for i, v := range blobShape.GetDim() {
-		shape[i] = v
+		shape[i] = int32(v)
 	}
 
-	blob.Reshape(shape)
+	b.Reshape(shape)
 }
 
-func (blob *Blob) ReshapeLike(other *Blob) {
-	blob.Reshape(other.shape)
+func (b *Blob) ReshapeLike(other *Blob) {
+	b.Reshape(other.shape)
 }
 
-func (blob *Blob) String() string {
+func (b *Blob) String() string {
 	var buffers bytes.Buffer
-	for _, v := range blob.shape {
+	for _, v := range b.shape {
 		buffers.WriteString(fmt.Sprintf("%d ", v))
 	}
-	buffers.WriteString(fmt.Sprintf("(%d)", blob.count))
+	buffers.WriteString(fmt.Sprintf("(%d)", b.count))
 
 	return buffers.String()
 }
 
-func (blob *Blob) Shape() []int {
-	return blob.shape
+func (b *Blob) Shape() []int32 {
+	return b.shape
 }
 
-func (blob *Blob) ShapeOfIndex(index int) int {
-	return blob.shape[index]
+func (b *Blob) ShapeOfIndex(index int) int32 {
+	return b.shape[index]
 }
 
-func (blob *Blob) AxesNum() int {
-	return len(blob.shape)
+func (b *Blob) AxesNum() int {
+	return len(b.shape)
 }
 
-func (blob *Blob) Count() int {
-	return blob.count
+func (b *Blob) Count() int {
+	return b.count
 }
 
-func (blob *Blob) num() int {
-	return blob.legacyShape(0)
+func (b *Blob) num() int32 {
+	return b.legacyShape(0)
 }
 
-func (blob *Blob) channels() int {
-	return blob.legacyShape(1)
+func (b *Blob) channels() int32 {
+	return b.legacyShape(1)
 }
 
-func (blob *Blob) height() int {
-	return blob.legacyShape(2)
+func (b *Blob) height() int32 {
+	return b.legacyShape(2)
 }
 
-func (blob *Blob) width() int {
-	return blob.legacyShape(3)
+func (b *Blob) width() int32 {
+	return b.legacyShape(3)
 }
 
-func (blob *Blob) legacyShape(index int) int {
-	if blob.AxesNum() > 4 {
+func (b *Blob) legacyShape(index int) int32 {
+	if b.AxesNum() > 4 {
 		panic("cannot use legacy accessors on Blobs with > 4 axes.")
 	}
 	if index > 4 && index < -4 {
 		panic("index is not in [-4, 4]")
 	}
 
-	if index > blob.AxesNum() || index < -blob.AxesNum() {
+	if index > b.AxesNum() || index < -b.AxesNum() {
 		return 1
 	}
 
-	return blob.shape[index]
+	return b.shape[index]
 }
 
-func (blob *Blob) offset(indices []int) int {
-	if len(indices) > blob.AxesNum() {
+func (b *Blob) offset(indices []int32) int32 {
+	if len(indices) > b.AxesNum() {
 		panic("offset: indices larger than blob axes number")
 	}
 
-	offset := 0
-	for i := 0; i < blob.AxesNum(); i++ {
-		offset *= blob.shape[i]
+	offset := int32(0)
+	for i := 0; i < b.AxesNum(); i++ {
+		offset *= b.shape[i]
 		if len(indices) > i {
-			if indices[i] > 0 && indices[i] < blob.shape[i] {
+			if indices[i] > int32(0) && indices[i] < b.shape[i] {
 				offset += indices[i]
 			}
 		}
@@ -247,34 +249,42 @@ func (blob *Blob) offset(indices []int) int {
 	return offset
 }
 
-func (blob *Blob) dataAt(index []int) float64 {
-	return blob.data[blob.offset(index)]
+// TODO
+func (b *Blob) dataAt(index []int32) float64 {
+	return b.DoubleData[b.offset(index)]
 }
 
-func (blob *Blob) diffAt(index []int) float64 {
-	return blob.diff[blob.offset(index)]
+// TODO
+func (b *Blob) diffAt(index []int32) float64 {
+	return b.DoubleDiff[b.offset(index)]
 }
 
 // AsumData compute the sum of absolute values (L1 norm) of the data
-func (blob *Blob) AsumData() float64 {
+func (b *Blob) AsumData() float64 {
+	return blas64.Asum(b.count, blas64.Vector{Data: b.DoubleData})
 }
 
 // AsumDiff compute the sum of absolute values (L1 norm) of the diff
-func (blob *Blob) AsumDiff() float64 {
+func (b *Blob) AsumDiff() float64 {
+	return blas64.Asum(b.count, blas64.Vector{Data: b.DoubleDiff})
 }
 
 // SumSquareData compute the sum of squares (L2 norm squared) of the data
-func (blob *Blob) SumSquareData() float64 {
+func (b *Blob) SumSquareData() float64 {
+	return blas64.Dot(b.count, blas64.Vector{Data: b.DoubleData}, blas64.Vector{Data: b.DoubleData})
 }
 
 // SumSquareDiff compute the sum of squares (L2 norm squared) of the diff
-func (blob *Blob) SumSquareDiff() float64 {
+func (b *Blob) SumSquareDiff() float64 {
+	return blas64.Dot(b.count, blas64.Vector{Data: b.DoubleDiff}, blas64.Vector{Data: b.DoubleDiff})
 }
 
 // ScaleData scale the blob data by a constant factor
-func (blob *Blob) ScaleData(scale float64) {
+func (b *Blob) ScaleData(scale float64) {
+	blas64.Scal(b.count, scale, blas64.Vector{Data: b.DoubleData})
 }
 
 // ScaleDiff scale the blob diff by a constant factor
-func (blob *Blob) ScaleDiff(scale float64) {
+func (b *Blob) ScaleDiff(scale float64) {
+	blas64.Scal(b.count, scale, blas64.Vector{Data: b.DoubleDiff})
 }
