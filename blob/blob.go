@@ -2,6 +2,7 @@ package blob
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
 
@@ -12,14 +13,12 @@ import (
 const kMaxBlobAxes = 32
 
 type Blob struct {
-	DoubleData []float64
-	DoubleDiff []float64
-	FloatData  []float32
-	FloatDiff  []float32
-	shapeData  []float64
-	shape      []int32
-	count      int
-	capacity   int
+	Data      []float64
+	Diff      []float64
+	shapeData []float64
+	shape     []int32
+	count     int
+	capacity  int
 }
 
 func New(shape []int32) *Blob {
@@ -31,7 +30,7 @@ func New(shape []int32) *Blob {
 	return b
 }
 
-func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) {
+func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 	// get shape
 	if reshape {
 		shape := []int32{}
@@ -49,34 +48,42 @@ func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) {
 		b.Reshape(shape)
 	} else {
 		if !b.ShapeEquals(other) {
-			panic("shape mismatch (reshape not set)")
+			return errors.New("shape mismatch (reshape not set)")
 		}
 	}
 
 	// copy data
 	if len(other.GetData()) > 0 {
 		if b.count != len(other.GetData()) {
-			panic("get data fail: count mismatch data length")
+			return errors.New("get data fail: count mismatch data length")
 		}
-		b.FloatData = other.GetData()
+		b.Data = make([]float64, len(other.GetData()))
+		for i, v := range other.GetData() {
+			b.Data[i] = float64(v)
+		}
 	} else {
 		if b.count != len(other.GetDoubleData()) {
-			panic("get double data fail: count mismatch data length")
+			return errors.New("get double data fail: count mismatch data length")
 		}
-		b.DoubleData = other.GetDoubleData()
+		b.Data = other.GetDoubleData()
 	}
 
 	if len(other.GetDiff()) > 0 {
 		if b.count != len(other.GetDiff()) {
-			panic("get diff fail: count mismatch data length")
+			return errors.New("get diff fail: count mismatch data length")
 		}
-		b.FloatDiff = other.GetDiff()
+		b.Diff = make([]float64, len(other.GetDiff()))
+		for i, v := range other.GetDiff() {
+			b.Diff[i] = float64(v)
+		}
 	} else {
 		if b.count != len(other.GetDoubleDiff()) {
-			panic("get double diff fail: count mismatch data length")
+			return errors.New("get double diff fail: count mismatch data length")
 		}
-		b.DoubleDiff = other.GetDoubleDiff()
+		b.Diff = other.GetDoubleDiff()
 	}
+
+	return nil
 }
 
 func (b *Blob) ToProto(proto *pb.BlobProto, writeDiff bool) {
@@ -86,23 +93,12 @@ func (b *Blob) ToProto(proto *pb.BlobProto, writeDiff bool) {
 	}
 	proto = &pb.BlobProto{
 		Shape:      &pb.BlobShape{Dim: shape},
-		Diff:       b.FloatDiff,
-		DoubleData: b.DoubleData,
-		DoubleDiff: b.DoubleDiff,
-	}
-	if b.FloatData != nil {
-		proto.Data = b.FloatData
-	}
-	if b.DoubleData != nil {
-		proto.DoubleData = b.DoubleData
+		DoubleData: b.Data,
 	}
 
 	if writeDiff {
-		if b.FloatDiff != nil {
-			proto.Diff = b.FloatDiff
-		}
-		if b.DoubleDiff != nil {
-			proto.DoubleDiff = b.DoubleDiff
+		if b.Diff != nil {
+			proto.DoubleDiff = b.Diff
 		}
 	}
 }
@@ -150,10 +146,8 @@ func (b *Blob) Reshape(shape []int32) {
 
 	if b.count > b.capacity {
 		b.capacity = b.count
-		b.FloatData = make([]float32, b.capacity)
-		b.FloatDiff = make([]float32, b.capacity)
-		b.DoubleData = make([]float64, b.capacity)
-		b.DoubleDiff = make([]float64, b.capacity)
+		b.Data = make([]float64, b.capacity)
+		b.Diff = make([]float64, b.capacity)
 	}
 }
 
@@ -251,40 +245,40 @@ func (b *Blob) offset(indices []int32) int32 {
 
 // TODO
 func (b *Blob) dataAt(index []int32) float64 {
-	return b.DoubleData[b.offset(index)]
+	return b.Data[b.offset(index)]
 }
 
 // TODO
 func (b *Blob) diffAt(index []int32) float64 {
-	return b.DoubleDiff[b.offset(index)]
+	return b.Diff[b.offset(index)]
 }
 
 // AsumData compute the sum of absolute values (L1 norm) of the data
 func (b *Blob) AsumData() float64 {
-	return blas64.Asum(b.count, blas64.Vector{Data: b.DoubleData})
+	return blas64.Asum(b.count, blas64.Vector{Data: b.Data})
 }
 
 // AsumDiff compute the sum of absolute values (L1 norm) of the diff
 func (b *Blob) AsumDiff() float64 {
-	return blas64.Asum(b.count, blas64.Vector{Data: b.DoubleDiff})
+	return blas64.Asum(b.count, blas64.Vector{Data: b.Diff})
 }
 
 // SumSquareData compute the sum of squares (L2 norm squared) of the data
 func (b *Blob) SumSquareData() float64 {
-	return blas64.Dot(b.count, blas64.Vector{Data: b.DoubleData}, blas64.Vector{Data: b.DoubleData})
+	return blas64.Dot(b.count, blas64.Vector{Data: b.Data}, blas64.Vector{Data: b.Data})
 }
 
 // SumSquareDiff compute the sum of squares (L2 norm squared) of the diff
 func (b *Blob) SumSquareDiff() float64 {
-	return blas64.Dot(b.count, blas64.Vector{Data: b.DoubleDiff}, blas64.Vector{Data: b.DoubleDiff})
+	return blas64.Dot(b.count, blas64.Vector{Data: b.Diff}, blas64.Vector{Data: b.Diff})
 }
 
 // ScaleData scale the blob data by a constant factor
 func (b *Blob) ScaleData(scale float64) {
-	blas64.Scal(b.count, scale, blas64.Vector{Data: b.DoubleData})
+	blas64.Scal(b.count, scale, blas64.Vector{Data: b.Data})
 }
 
 // ScaleDiff scale the blob diff by a constant factor
 func (b *Blob) ScaleDiff(scale float64) {
-	blas64.Scal(b.count, scale, blas64.Vector{Data: b.DoubleDiff})
+	blas64.Scal(b.count, scale, blas64.Vector{Data: b.Diff})
 }
