@@ -12,15 +12,17 @@ import (
 const kMaxBlobAxes = 32
 
 type Blob struct {
-	data      []float64
-	diff      []float64
-	shapeData []float64
-	shape     []int
-	count     int
-	capacity  int
+	DoubleData []float64
+	DoubleDiff []float64
+	FloatData  []float32
+	FloatDiff  []float32
+	shapeData  []float64
+	shape      []int32
+	count      int
+	capacity   int
 }
 
-func New(shape []int) *Blob {
+func New(shape []int32) *Blob {
 	blob := &Blob{
 		capacity: 0,
 	}
@@ -29,17 +31,97 @@ func New(shape []int) *Blob {
 	return blob
 }
 
-func (blob *Blob) FromProto(proto *pb.BlobProto, reshape bool) error {
+func (blob *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 	// get shape
+	if reshape {
+		shape := []int32{}
+		if other.GetHeight() != 0 || other.GetChannels() != 0 || other.GetNum() != 0 || other.GetWidth() != 0 {
+			shape = append(shape, other.GetNum())
+			shape = append(shape, other.GetChannels())
+			shape = append(shape, other.GetHeight())
+			shape = append(shape, other.GetWidth())
+		} else {
+			blobShape := other.GetShape()
+			for _, v := range blobShape.GetDim() {
+				shape = append(shape, int32(v))
+			}
+		}
+		blob.Reshape(shape)
+	} else {
+		if !blob.ShapeEquals(other) {
+			panic("shape mismatch (reshape not set)")
+		}
+	}
 
 	// copy data
+	if other.GetData() {
+		if blob.count != len(other.GetData()) {
+			panic("get data fail: count mismatch data length")
+		}
+		blob.FloatData = other.GetData()
+	} else {
+		if blob.count != len(other.GetDoubleData()) {
+			panic("get double data fail: count mismatch data length")
+		}
+		blob.DoubleData = other.GetDoubleData()
+	}
+
+	if other.GetDiff() {
+		if blob.count != len(other.GetDiff()) {
+			panic("get diff fail: count mismatch data length")
+		}
+		blob.FloatDiff = other.GetDiff()
+	} else {
+		if blob.count != len(other.GetDoubleDiff()) {
+			panic("get double diff fail: count mismatch data length")
+		}
+		blob.DoubleDiff = other.GetDoubleDiff()
+	}
 }
 
 func (blob *Blob) ToProto(proto *pb.BlobProto, writeDiff bool) error {
+	shape := []int64{}
+	for _, k := range blob.shape {
+		shape = append(shape, int64(k))
+	}
+	proto = &pb.BlobProto{
+		Shape:      &pb.BlobShape{Dim: shape},
+		Diff:       blob.FloatDiff,
+		DoubleData: blob.DoubleData,
+		DoubleDiff: blob.DoubleDiff,
+	}
+	if blob.FloatData != nil {
+		proto.Data = blob.FloatData
+	}
+	if blob.DoubleData != nil {
+		proto.DoubleData = blob.DoubleData
+	}
 
+	if writeDiff {
+		if blob.FloatDiff != nil {
+			proto.Diff = blob.FloatDiff
+		}
+		if blob.DoubleDiff != nil {
+			proto.DoubleDiff = blob.DoubleDiff
+		}
+	}
 }
 
-func (blob *Blob) Reshape(shape []int) {
+func (blob *Blob) ShapeEquals(other *pb.BlobProto) bool {
+	if other.GetHeight() != 0 || other.GetChannels() != 0 || other.GetNum() != 0 || other.GetWidth() != 0 {
+		return len(blob.shape) <= 4 && blob.legacyShape(-4) == other.GetNum() && blob.legacyShape(-3) == other.GetChannels() && blob.legacyShape(-2) == other.GetHeight() && blob.legacyShape(-1) == other.GetWidth()
+	}
+
+	otherShape := other.GetShape().GetDim()
+	for i, v := range otherShape {
+		if blob.shape[i] != int32(v) {
+			return false
+		}
+	}
+	return true
+}
+
+func (blob *Blob) Reshape(shape []int32) {
 	if len(shape) > kMaxBlobAxes {
 		panic(fmt.Printf("blob shape dimensions %d larger than %d", len(shape), kMaxBlobAxes))
 	}
@@ -47,7 +129,7 @@ func (blob *Blob) Reshape(shape []int) {
 	blob.count = 1
 
 	// reset size of shape and shapeData
-	blob.shape = make([]int, len(shape))
+	blob.shape = make([]int32, len(shape))
 	if blob.shape != nil || blob.shape.Size() < len(shape) {
 		blob.shapeData.Reset(len(shape))
 	}
