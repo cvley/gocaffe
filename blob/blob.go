@@ -3,34 +3,39 @@ package blob
 import (
 	"bytes"
 	"fmt"
-	"github.com/cvley/gocaffe/proto"
+	"log"
 	"math"
+
+	pb "github.com/cvley/gocaffe/proto"
 )
 
 const kMaxBlobAxes = 32
 
 type Blob struct {
-	data      []float32
-	diff      []float32
-	shapeData []float32
+	data      []float64
+	diff      []float64
+	shapeData []float64
 	shape     []int
 	count     int
 	capacity  int
 }
 
-func New(num, channels, height, width int) *Blob {
+func New(shape []int) *Blob {
+	blob := &Blob{
+		capacity: 0,
+	}
+
+	blob.Reshape(shape)
+	return blob
 }
 
-func (blob *Blob) Update() {
+func (blob *Blob) FromProto(proto *pb.BlobProto, reshape bool) error {
+	// get shape
 
+	// copy data
 }
 
-func (blob *Blob) FromProto(proto *proto.BlobProto, reshape bool) error {
-	if proto.
-
-}
-
-func (blob *Blob) ToProto(proto *proto.BlobProto, writeDiff bool) error {
+func (blob *Blob) ToProto(proto *pb.BlobProto, writeDiff bool) error {
 
 }
 
@@ -68,7 +73,7 @@ func (blob *Blob) Reshape(shape []int) {
 	}
 }
 
-func (blob *Blob) ReshapeFromBlobShape(blobShape *probo.BlobShape) {
+func (blob *Blob) ReshapeFromBlobShape(blobShape *pb.BlobShape) {
 	if (len(blobShape.GetDim())) > kMaxBlobAxes {
 		panic(fmt.Printf("blob shape dimensions %d larger than %d", len(blobShape.GetDim(), kMaxBlobAxes)))
 	}
@@ -109,4 +114,85 @@ func (blob *Blob) AxesNum() int {
 
 func (blob *Blob) Count() int {
 	return blob.count
+}
+
+func (blob *Blob) num() int {
+	return blob.legacyShape(0)
+}
+
+func (blob *Blob) channels() int {
+	return blob.legacyShape(1)
+}
+
+func (blob *Blob) height() int {
+	return blob.legacyShape(2)
+}
+
+func (blob *Blob) width() int {
+	return blob.legacyShape(3)
+}
+
+func (blob *Blob) legacyShape(index int) int {
+	if blob.AxesNum() > 4 {
+		panic("cannot use legacy accessors on Blobs with > 4 axes.")
+	}
+	if index > 4 && index < -4 {
+		panic("index is not in [-4, 4]")
+	}
+
+	if index > blob.AxesNum() || index < -blob.AxesNum() {
+		return 1
+	}
+
+	return blob.shape[index]
+}
+
+func (blob *Blob) offset(indices []int) int {
+	if len(indices) > blob.AxesNum() {
+		panic("offset: indices larger than blob axes number")
+	}
+
+	offset := 0
+	for i := 0; i < blob.AxesNum(); i++ {
+		offset *= blob.shape[i]
+		if len(indices) > i {
+			if indices[i] > 0 && indices[i] < blob.shape[i] {
+				offset += indices[i]
+			}
+		}
+	}
+
+	return offset
+}
+
+func (blob *Blob) dataAt(index []int) float64 {
+	return blob.data[blob.offset(index)]
+}
+
+func (blob *Blob) diffAt(index []int) float64 {
+	return blob.diff[blob.offset(index)]
+}
+
+// AsumData compute the sum of absolute values (L1 norm) of the data
+func (blob *Blob) AsumData() float64 {
+}
+
+// AsumDiff compute the sum of absolute values (L1 norm) of the diff
+func (blob *Blob) AsumDiff() float64 {
+}
+
+// SumSquareData compute the sum of squares (L2 norm squared) of the data
+func (blob *Blob) SumSquareData() float64 {
+}
+
+// SumSquareDiff compute the sum of squares (L2 norm squared) of the diff
+func (blob *Blob) SumSquareDiff() float64 {
+}
+
+// ScaleData scale the blob data by a constant factor
+func (blob *Blob) ScaleData(scale float64) {
+}
+
+// ScaleDiff scale the blob diff by a constant factor
+func (blob *Blob) ScaleDiff(scale float64) {
 }
