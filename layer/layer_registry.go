@@ -1,12 +1,82 @@
 package layer
 
 import (
-	"errors"
 	"fmt"
 	"log"
+	"strings"
 
-	pb "github.com/cvley/proto"
+	"github.com/cvley/gocaffe/blob"
+	pb "github.com/cvley/gocaffe/proto"
 )
+
+var (
+	LayerRegisterer LayerRegistry
+)
+
+type Layer interface {
+	SetUp(bottom, top []*blob.Blob)
+	Reshape(bottom, top []*blob.Blob)
+	Forward(bottom, top []*blob.Blob)
+	Backward(bottom, top []*blob.Blob, propagateDown []bool)
+	ToProto(writeDiff bool) (*pb.LayerParameter, error)
+	Type() string
+}
+
+type Creator func(*pb.LayerParameter) (Layer, error)
+
+type LayerRegistry map[string]Creator
+
+func init() {
+	LayerRegisterer = make(LayerRegistry)
+	LayerRegisterer.AddCreator("Convolution", GetConvolutionLayer)
+	LayerRegisterer.AddCreator("Pooling", GetPoolLayer)
+	LayerRegisterer.AddCreator("LRN", GetLRNLayer)
+	LayerRegisterer.AddCreator("ReLU", GetReLULayer)
+	LayerRegisterer.AddCreator("Sigmoid", GetSigmoidLayer)
+	LayerRegisterer.AddCreator("Softmax", GetSoftmaxLayer)
+	LayerRegisterer.AddCreator("TanH", GetTanHLayer)
+}
+
+func (r *LayerRegistry) AddCreator(tp string, creator Creator) error {
+	if r.layerExist(tp) {
+		return fmt.Errorf("Layer type %s already registered.")
+	}
+	r[tp] = creator
+	return nil
+}
+
+func (r *LayerRegistry) CreateLayer(param *pb.LayerParameter) (Layer, error) {
+	tp := param.GetType()
+	if !r.layerExist(tp) {
+		return nil, fmt.Errorf("layer %s not exist", tp)
+	}
+
+	log.Printf("Creating layer %s", param.GetName())
+	return r[tp](param)
+}
+
+func (r *LayerRegistry) LayerTypeList() []string {
+	result := []string{}
+	for name, _ := range r {
+		result = append(result, name)
+	}
+	return result
+}
+
+func (r *LayerRegistry) LayerTypeListString() string {
+	typeList := r.LayerTypeList()
+	return strings.Join(typeList, ", ")
+}
+
+func (r *LayerRegistry) layerExist(name string) bool {
+	for k, _ := range r {
+		if k == name {
+			return true
+		}
+	}
+
+	return false
+}
 
 func GetConvolutionLayer(param *pb.LayerParameter) (Layer, error) {
 	convParam := param.GetConvolutionParam()
