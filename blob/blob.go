@@ -61,7 +61,7 @@ func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 		for i, v := range other.GetData() {
 			b.Data[i] = float64(v)
 		}
-	} else {
+	} else if len(other.GetDoubleData()) > 0 {
 		if b.count != len(other.GetDoubleData()) {
 			return errors.New("get double data fail: count mismatch data length")
 		}
@@ -76,7 +76,7 @@ func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 		for i, v := range other.GetDiff() {
 			b.Diff[i] = float64(v)
 		}
-	} else {
+	} else if len(other.GetDoubleDiff()) > 0 {
 		if b.count != len(other.GetDoubleDiff()) {
 			return errors.New("get double diff fail: count mismatch data length")
 		}
@@ -86,12 +86,12 @@ func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 	return nil
 }
 
-func (b *Blob) ToProto(proto *pb.BlobProto, writeDiff bool) {
+func (b *Blob) ToProto(writeDiff bool) *pb.BlobProto {
 	shape := []int64{}
 	for _, k := range b.shape {
 		shape = append(shape, int64(k))
 	}
-	proto = &pb.BlobProto{
+	proto := &pb.BlobProto{
 		Shape:      &pb.BlobShape{Dim: shape},
 		DoubleData: b.Data,
 	}
@@ -101,6 +101,8 @@ func (b *Blob) ToProto(proto *pb.BlobProto, writeDiff bool) {
 			proto.DoubleDiff = b.Diff
 		}
 	}
+
+	return proto
 }
 
 func (b *Blob) ShapeEquals(other *pb.BlobProto) bool {
@@ -243,12 +245,10 @@ func (b *Blob) offset(indices []int32) int32 {
 	return offset
 }
 
-// TODO
 func (b *Blob) dataAt(index []int32) float64 {
 	return b.Data[b.offset(index)]
 }
 
-// TODO
 func (b *Blob) diffAt(index []int32) float64 {
 	return b.Diff[b.offset(index)]
 }
