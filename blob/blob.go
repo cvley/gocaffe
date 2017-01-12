@@ -105,6 +105,18 @@ func (b *Blob) ToProto(writeDiff bool) *pb.BlobProto {
 	return proto
 }
 
+func (b *Blob) CanonicalAxisIndex(index int) int {
+	if index > b.AxesNum() || index < -b.AxesNum() {
+		panic("index is not in blob axes range")
+	}
+
+	if index < 0 {
+		return index + b.AxesNum()
+	}
+
+	return index
+}
+
 func (b *Blob) ShapeEquals(other *pb.BlobProto) bool {
 	if other.GetHeight() != 0 || other.GetChannels() != 0 || other.GetNum() != 0 || other.GetWidth() != 0 {
 		return len(b.shape) <= 4 && b.legacyShape(-4) == other.GetNum() && b.legacyShape(-3) == other.GetChannels() && b.legacyShape(-2) == other.GetHeight() && b.legacyShape(-1) == other.GetWidth()
