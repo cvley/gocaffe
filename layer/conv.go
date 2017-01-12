@@ -22,6 +22,13 @@ type ConvLayer struct {
 	kernelShapeData *blob.Blob
 	stride          *blob.Blob
 	pad             *blob.Blob
+	dilation        *blob.Blob
+	channels        int32
+	numOutput       int32
+	group           int32
+	convOutChannels int32
+	convInChannels  int32
+	biasTerm	bool
 }
 
 func NewConvolutionLayer(param *pb.LayerParameter) *ConvLayer {
@@ -148,6 +155,59 @@ func (conv *ConvLayer) SetUp(bottom, top []*blob.Blob) error {
 	}
 
 	// setup dilation dimensions
+	conv.dilation.Reshape(spatialDimBlobShape)
+	numDilationDims := len(conv.ConvParam.GetDilation())
+	if numDilationDims != 0 && numDilationDims != 1 && numDilationDims != conv.numSpatialAxis {
+		return errors.New("dilation must be specified once, or once per spatial dimension")
+	}
+	kDefaultDilation := 1
+	for i := 0; i < conv.numSpatialAxis; i++ {
+		switch numDilationDims {
+		case 0:
+			conv.dilation.Data[i] = kDefaultDilation
+		case 1:
+			conv.dilation.Data[i] = conv.ConvParam.GetDilation()[0]
+		default:
+			conv.dilation.Data[i] = conv.ConvParam.GetDilation()[i]
+		}
+	}
+
+	// special case: im2col is the identity for 1x1 convolution with stride 1
+	// and no padding, so flag for skipping the buffer and transformation
+	is1x1 := true
+	for i := 0; i < conv.numSpatialAxis; i++ {
+		is1x1 &= conv.kernelShapeData.Data[i] == 1 && conv.stride.Data[i] == 1 && conv.pad.Data[i] == 0
+		if !is1x1 {
+			break
+		}
+	}
+	// configure output channels and groups
+	conv.channels = bottom[0].Shape()(conv.channelAxis)
+	conv.numOutput = conv.ConvParam.GetNumOutput()
+	if conv.numOutput <= 0 {
+		return errors.New("conv number output is less than 0")
+	}
+	conv.group = conv.ConvParam.GetGroup()
+	if conv.channels%conv.group != 0 {
+		return errors.New("conv channel and group mismatch")
+	}
+	if conv.numOutput%conv.group != 0 {
+		return errors.New("number of output should be multiples of group.")
+	}
+
+	// TODO: deconv need check reverse_dimensions() func
+	conv.convOutChannels = conv.channels
+	conv.convInChannels = conv.numOutput
+
+	// handle the parameters: weights and biases
+	// - blobs_[0] holds the filter weights
+	// - blobs_[1] holds the biases (optional)
+	weightShape := []int32{conv.convOutChannels, conv.convInChannels / conv.group}
+	for i:=0; i<conv.numSpatialAxis; i++ {
+		weightShape = append(weightShape, conv.kernelShapeData.Data[i])
+	}
+	conv.biasTerm = conv.ConvParam.GetBiasTerm()
+	biasTermParam := conv.ConvParm.GetBiasFiller()
 }
 
 func (conv *ConvLayer) Reshape(bottom, top []*blob.Blob) {
