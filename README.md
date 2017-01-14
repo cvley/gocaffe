@@ -1,5 +1,5 @@
 # gocaffe
-implement Caffe deep learning framework in pure golang
+implement Caffe deep learning framework in pure golang, still in progress.
 
 ### Using protocol buffers with Go
 
