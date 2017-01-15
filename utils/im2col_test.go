@@ -12,4 +12,17 @@ func TestIm2Col(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("%+v", output)
+
+	in, err := Col2im(output, 1, 3, 3, 1, 1, 0, 0, 1, 1, 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(input) != len(in) {
+		t.Fatal("col2im fail: mismatch length")
+	}
+	for i, v := range in {
+		if v != input[i] {
+			t.Fatal("col2im fail: mismatch value")
+		}
+	}
 }
