@@ -1,18 +1,20 @@
 package net
 
 import (
-	caffeproto "github.com/cvley/gocaffe/proto"
-	"github.com/golang/protobuf/proto"
 	"io/ioutil"
 	"log"
-//	"fmt"
+	//	"fmt"
 	"os"
+
+	"github.com/cvley/gocaffe/layer"
+	pb "github.com/cvley/gocaffe/proto"
+	"github.com/golang/protobuf/proto"
 )
 
 type Net struct {
 }
 
-func (net *Net) CopyTrainedLayersFromParam(netParam *caffeproto.NetParameter) (*Net, error) {
+func (net *Net) CopyTrainedLayersFromParam(netParam *pb.NetParameter) (*Net, error) {
 	log.Println("Ok")
 	return nil, nil
 }
@@ -29,14 +31,21 @@ func (net *Net) CopyTrainedLayersFromFile(file string) (*Net, error) {
 	}
 	log.Println(len(b))
 
-	param := &caffeproto.NetParameter{}
+	param := &pb.NetParameter{}
 	if err := proto.Unmarshal(b, param); err != nil {
 		return nil, err
 	}
 
-	for _, layer := range param.GetLayers() {
-		log.Println(layer.GetName(), layer.GetType(), layer.GetBottom(), layer.GetTop())
-		log.Println(layer)
+	log.Printf("construct %s", param.GetName())
+
+	for _, layerParam := range param.GetLayers() {
+		if layerParam.GetName() == "conv1" {
+			l, err := layer.NewConvolutionLayer(layerParam)
+			if err != nil {
+				log.Println(err)
+			}
+			log.Printf("==%+v", l)
+		}
 	}
 
 	return nil, nil

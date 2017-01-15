@@ -1,8 +1,6 @@
 package utils
 
 import (
-	"log"
-
 	"github.com/gonum/blas"
 	"github.com/gonum/blas/blas64"
 )
@@ -11,7 +9,7 @@ import (
 //  C = alpha * A * B + beta * C,
 // where A, B, and C are dense matrices, and alpha and beta are scalars.
 // tA and tB specify whether A or B are transposed.
-func gocaffeGemm(tA, tB blas.Transpose, alpha float64, a, b blas64.General, beta float64, c blas64.General) {
+func GocaffeGemm(tA, tB blas.Transpose, alpha float64, a, b blas64.General, beta float64, c blas64.General) {
 	blas64.Gemm(tA, tB, alpha, a, b, beta, c)
 }
 

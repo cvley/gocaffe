@@ -15,19 +15,16 @@ const kMaxBlobAxes = 32
 type Blob struct {
 	Data      []float64
 	Diff      []float64
-	shapeData []float64
-	shape     []int32
-	count     int
-	capacity  int
+	ShapeData []float64
+	Shape    []int32
+	Count     int
+	Capacity  int
 }
 
-func New(shape []int32) *Blob {
-	b := &Blob{
-		capacity: 0,
+func New() *Blob {
+	return &Blob{
+		Capacity: 0,
 	}
-
-	b.Reshape(shape)
-	return b
 }
 
 func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
@@ -54,7 +51,7 @@ func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 
 	// copy data
 	if len(other.GetData()) > 0 {
-		if b.count != len(other.GetData()) {
+		if b.Count != len(other.GetData()) {
 			return errors.New("get data fail: count mismatch data length")
 		}
 		b.Data = make([]float64, len(other.GetData()))
@@ -62,14 +59,14 @@ func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 			b.Data[i] = float64(v)
 		}
 	} else if len(other.GetDoubleData()) > 0 {
-		if b.count != len(other.GetDoubleData()) {
+		if b.Count != len(other.GetDoubleData()) {
 			return errors.New("get double data fail: count mismatch data length")
 		}
 		b.Data = other.GetDoubleData()
 	}
 
 	if len(other.GetDiff()) > 0 {
-		if b.count != len(other.GetDiff()) {
+		if b.Count != len(other.GetDiff()) {
 			return errors.New("get diff fail: count mismatch data length")
 		}
 		b.Diff = make([]float64, len(other.GetDiff()))
@@ -77,7 +74,7 @@ func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 			b.Diff[i] = float64(v)
 		}
 	} else if len(other.GetDoubleDiff()) > 0 {
-		if b.count != len(other.GetDoubleDiff()) {
+		if b.Count != len(other.GetDoubleDiff()) {
 			return errors.New("get double diff fail: count mismatch data length")
 		}
 		b.Diff = other.GetDoubleDiff()
@@ -88,7 +85,7 @@ func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 
 func (b *Blob) ToProto(writeDiff bool) *pb.BlobProto {
 	shape := []int64{}
-	for _, k := range b.shape {
+	for _, k := range b.Shape {
 		shape = append(shape, int64(k))
 	}
 	proto := &pb.BlobProto{
@@ -119,12 +116,12 @@ func (b *Blob) CanonicalAxisIndex(index int) int {
 
 func (b *Blob) ShapeEquals(other *pb.BlobProto) bool {
 	if other.GetHeight() != 0 || other.GetChannels() != 0 || other.GetNum() != 0 || other.GetWidth() != 0 {
-		return len(b.shape) <= 4 && b.legacyShape(-4) == other.GetNum() && b.legacyShape(-3) == other.GetChannels() && b.legacyShape(-2) == other.GetHeight() && b.legacyShape(-1) == other.GetWidth()
+		return len(b.Shape) <= 4 && b.LegacyShape(-4) == other.GetNum() && b.LegacyShape(-3) == other.GetChannels() && b.LegacyShape(-2) == other.GetHeight() && b.LegacyShape(-1) == other.GetWidth()
 	}
 
 	otherShape := other.GetShape().GetDim()
 	for i, v := range otherShape {
-		if b.shape[i] != int32(v) {
+		if b.Shape[i] != int32(v) {
 			return false
 		}
 	}
@@ -136,32 +133,32 @@ func (b *Blob) Reshape(shape []int32) {
 		panic("blob shape dimensions larger than max blob axes")
 	}
 
-	b.count = 1
+	b.Count = 1
 
 	// reset size of shape and shapeData
-	b.shape = make([]int32, len(shape))
-	if b.shape != nil || len(b.shape) < len(shape) {
-		b.shapeData = make([]float64, len(shape))
+	b.Shape = make([]int32, len(shape))
+	if b.Shape != nil || len(b.Shape) < len(shape) {
+		b.ShapeData = make([]float64, len(shape))
 	}
 
 	for i, v := range shape {
 		if v < 0 {
 			panic("shape value invalid")
 		}
-		if b.count != 0 {
-			if int(v) > math.MaxInt64/b.count {
+		if b.Count != 0 {
+			if int(v) > math.MaxInt64/b.Count {
 				panic("blob size exceeds MaxInt64")
 			}
-			b.count *= int(v)
-			b.shape[i] = v
-			b.shapeData = append(b.shapeData, float64(v))
+			b.Count *= int(v)
+			b.Shape[i] = v
+			b.ShapeData = append(b.ShapeData, float64(v))
 		}
 	}
 
-	if b.count > b.capacity {
-		b.capacity = b.count
-		b.Data = make([]float64, b.capacity)
-		b.Diff = make([]float64, b.capacity)
+	if b.Count > b.Capacity {
+		b.Capacity = b.Count
+		b.Data = make([]float64, b.Capacity)
+		b.Diff = make([]float64, b.Capacity)
 	}
 }
 
@@ -179,52 +176,44 @@ func (b *Blob) ReshapeFromBlobShape(blobShape *pb.BlobShape) {
 }
 
 func (b *Blob) ReshapeLike(other *Blob) {
-	b.Reshape(other.shape)
+	b.Reshape(other.Shape)
 }
 
 func (b *Blob) String() string {
 	var buffers bytes.Buffer
-	for _, v := range b.shape {
+	for _, v := range b.Shape {
 		buffers.WriteString(fmt.Sprintf("%d ", v))
 	}
-	buffers.WriteString(fmt.Sprintf("(%d)", b.count))
+	buffers.WriteString(fmt.Sprintf("(%d)", b.Count))
 
 	return buffers.String()
 }
 
-func (b *Blob) Shape() []int32 {
-	return b.shape
-}
-
 func (b *Blob) ShapeOfIndex(index int) int32 {
-	return b.shape[index]
+	return b.Shape[index]
 }
 
 func (b *Blob) AxesNum() int {
-	return len(b.shape)
+	return len(b.Shape)
 }
 
-func (b *Blob) Count() int {
-	return b.count
+func (b *Blob) Num() int32 {
+	return b.LegacyShape(0)
 }
 
-func (b *Blob) num() int32 {
-	return b.legacyShape(0)
+func (b *Blob) Channels() int32 {
+	return b.LegacyShape(1)
 }
 
-func (b *Blob) channels() int32 {
-	return b.legacyShape(1)
+func (b *Blob) Height() int32 {
+	return b.LegacyShape(2)
 }
 
-func (b *Blob) height() int32 {
-	return b.legacyShape(2)
+func (b *Blob) Width() int32 {
+	return b.LegacyShape(3)
 }
 
-func (b *Blob) width() int32 {
-	return b.legacyShape(3)
-}
-
-func (b *Blob) legacyShape(index int) int32 {
+func (b *Blob) LegacyShape(index int) int32 {
 	if b.AxesNum() > 4 {
 		panic("cannot use legacy accessors on Blobs with > 4 axes.")
 	}
@@ -236,7 +225,7 @@ func (b *Blob) legacyShape(index int) int32 {
 		return 1
 	}
 
-	return b.shape[index]
+	return b.Shape[index]
 }
 
 func (b *Blob) offset(indices []int32) int32 {
@@ -246,9 +235,9 @@ func (b *Blob) offset(indices []int32) int32 {
 
 	offset := int32(0)
 	for i := 0; i < b.AxesNum(); i++ {
-		offset *= b.shape[i]
+		offset *= b.Shape[i]
 		if len(indices) > i {
-			if indices[i] > int32(0) && indices[i] < b.shape[i] {
+			if indices[i] > int32(0) && indices[i] < b.Shape[i] {
 				offset += indices[i]
 			}
 		}
@@ -267,30 +256,30 @@ func (b *Blob) diffAt(index []int32) float64 {
 
 // AsumData compute the sum of absolute values (L1 norm) of the data
 func (b *Blob) AsumData() float64 {
-	return blas64.Asum(b.count, blas64.Vector{Data: b.Data})
+	return blas64.Asum(b.Count, blas64.Vector{Data: b.Data})
 }
 
 // AsumDiff compute the sum of absolute values (L1 norm) of the diff
 func (b *Blob) AsumDiff() float64 {
-	return blas64.Asum(b.count, blas64.Vector{Data: b.Diff})
+	return blas64.Asum(b.Count, blas64.Vector{Data: b.Diff})
 }
 
 // SumSquareData compute the sum of squares (L2 norm squared) of the data
 func (b *Blob) SumSquareData() float64 {
-	return blas64.Dot(b.count, blas64.Vector{Data: b.Data}, blas64.Vector{Data: b.Data})
+	return blas64.Dot(b.Count, blas64.Vector{Data: b.Data}, blas64.Vector{Data: b.Data})
 }
 
 // SumSquareDiff compute the sum of squares (L2 norm squared) of the diff
 func (b *Blob) SumSquareDiff() float64 {
-	return blas64.Dot(b.count, blas64.Vector{Data: b.Diff}, blas64.Vector{Data: b.Diff})
+	return blas64.Dot(b.Count, blas64.Vector{Data: b.Diff}, blas64.Vector{Data: b.Diff})
 }
 
 // ScaleData scale the blob data by a constant factor
 func (b *Blob) ScaleData(scale float64) {
-	blas64.Scal(b.count, scale, blas64.Vector{Data: b.Data})
+	blas64.Scal(b.Count, scale, blas64.Vector{Data: b.Data})
 }
 
 // ScaleDiff scale the blob diff by a constant factor
 func (b *Blob) ScaleDiff(scale float64) {
-	blas64.Scal(b.count, scale, blas64.Vector{Data: b.Diff})
+	blas64.Scal(b.Count, scale, blas64.Vector{Data: b.Diff})
 }

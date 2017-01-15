@@ -1,6 +1,7 @@
 package layer
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -14,15 +15,11 @@ var (
 )
 
 type Layer interface {
-	SetUp(bottom, top []*blob.Blob)
-	Reshape(bottom, top []*blob.Blob)
-	Forward(bottom, top []*blob.Blob)
-	Backward(bottom, top []*blob.Blob, propagateDown []bool)
-	ToProto(writeDiff bool) (*pb.LayerParameter, error)
+	Forward(bottom []*blob.Blob) ([]*blob.Blob, error)
 	Type() string
 }
 
-type Creator func(*pb.LayerParameter) (Layer, error)
+type Creator func(*pb.V1LayerParameter) (Layer, error)
 
 type LayerRegistry map[string]Creator
 
@@ -37,7 +34,7 @@ func init() {
 	LayerRegisterer.AddCreator("TanH", GetTanHLayer)
 }
 
-func (r *LayerRegistry) AddCreator(tp string, creator Creator) error {
+func (r LayerRegistry) AddCreator(tp string, creator Creator) error {
 	if r.layerExist(tp) {
 		return fmt.Errorf("Layer type %s already registered.")
 	}
@@ -45,8 +42,8 @@ func (r *LayerRegistry) AddCreator(tp string, creator Creator) error {
 	return nil
 }
 
-func (r *LayerRegistry) CreateLayer(param *pb.LayerParameter) (Layer, error) {
-	tp := param.GetType()
+func (r LayerRegistry) CreateLayer(param *pb.V1LayerParameter) (Layer, error) {
+	tp := param.GetName()
 	if !r.layerExist(tp) {
 		return nil, fmt.Errorf("layer %s not exist", tp)
 	}
@@ -55,7 +52,7 @@ func (r *LayerRegistry) CreateLayer(param *pb.LayerParameter) (Layer, error) {
 	return r[tp](param)
 }
 
-func (r *LayerRegistry) LayerTypeList() []string {
+func (r LayerRegistry) LayerTypeList() []string {
 	result := []string{}
 	for name, _ := range r {
 		result = append(result, name)
@@ -63,12 +60,12 @@ func (r *LayerRegistry) LayerTypeList() []string {
 	return result
 }
 
-func (r *LayerRegistry) LayerTypeListString() string {
+func (r LayerRegistry) LayerTypeListString() string {
 	typeList := r.LayerTypeList()
 	return strings.Join(typeList, ", ")
 }
 
-func (r *LayerRegistry) layerExist(name string) bool {
+func (r LayerRegistry) layerExist(name string) bool {
 	for k, _ := range r {
 		if k == name {
 			return true
@@ -78,7 +75,7 @@ func (r *LayerRegistry) layerExist(name string) bool {
 	return false
 }
 
-func GetConvolutionLayer(param *pb.LayerParameter) (Layer, error) {
+func GetConvolutionLayer(param *pb.V1LayerParameter) (Layer, error) {
 	convParam := param.GetConvolutionParam()
 	if convParam == nil {
 		return nil, errors.New("get convolution param fail")
@@ -96,7 +93,7 @@ func GetConvolutionLayer(param *pb.LayerParameter) (Layer, error) {
 	return NewConvolutionLayer(param)
 }
 
-func GetPoolLayer(param *pb.LayerParameter) (Layer, error) {
+func GetPoolLayer(param *pb.V1LayerParameter) (Layer, error) {
 	poolParam := param.GetPoolingParam()
 	if poolParam == nil {
 		return nil, errors.New("get pooling param fail")
@@ -114,7 +111,7 @@ func GetPoolLayer(param *pb.LayerParameter) (Layer, error) {
 	return NewPoolingLayer(param)
 }
 
-func GetLRNLayer(param *pb.LayerParameter) (Layer, error) {
+func GetLRNLayer(param *pb.V1LayerParameter) (Layer, error) {
 	lrnParam := param.GetLrnParam()
 	if lrnParam == nil {
 		return nil, errors.New("get lrn param fail")
@@ -132,7 +129,7 @@ func GetLRNLayer(param *pb.LayerParameter) (Layer, error) {
 	return NewLRNLayer(param)
 }
 
-func GetReLULayer(param *pb.LayerParameter) (Layer, error) {
+func GetReLULayer(param *pb.V1LayerParameter) (Layer, error) {
 	reluParam := param.GetReluParam()
 	if reluParam == nil {
 		return nil, errors.New("get relu param fail")
@@ -149,7 +146,7 @@ func GetReLULayer(param *pb.LayerParameter) (Layer, error) {
 	return NewReLULayer(param)
 }
 
-func GetSigmoidLayer(param *pb.LayerParameter) (Layer, error) {
+func GetSigmoidLayer(param *pb.V1LayerParameter) (Layer, error) {
 	sigParam := param.GetSigmoidParam()
 	if sigParam == nil {
 		return nil, errors.New("get sigmoid param fail")
@@ -166,7 +163,7 @@ func GetSigmoidLayer(param *pb.LayerParameter) (Layer, error) {
 	return NewSigmoidLayer(param)
 }
 
-func GetSoftmaxLayer(param *pb.LayerParameter) (Layer, error) {
+func GetSoftmaxLayer(param *pb.V1LayerParameter) (Layer, error) {
 	softParam := param.GetSoftmaxParam()
 	if softParam == nil {
 		return nil, errors.New("get soft param fail")
@@ -183,7 +180,7 @@ func GetSoftmaxLayer(param *pb.LayerParameter) (Layer, error) {
 	return NewSoftmaxLayer(param)
 }
 
-func GetTanHLayer(param *pb.LayerParameter) (Layer, error) {
+func GetTanHLayer(param *pb.V1LayerParameter) (Layer, error) {
 	tanhParam := param.GetTanhParam()
 	if tanhParam == nil {
 		return nil, errors.New("get tanh param fail")

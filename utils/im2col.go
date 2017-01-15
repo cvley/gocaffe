@@ -10,6 +10,7 @@ var (
 	floatZero = float64(0)
 )
 
+//TODO: use blob instead
 func Im2col(data []float64, channels, height, width, kernelH, kernelW, padH, padW, strideH, strideW, dilationH, dilationW int) (blas64.General, error) {
 	if len(data) < channels*width*height {
 		return blas64.General{}, errors.New("mismatch data length with channels*width*height")
