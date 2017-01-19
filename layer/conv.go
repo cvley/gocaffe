@@ -101,11 +101,10 @@ func (conv *ConvLayer) forwardGemm(bottom *blob.Blob, weight []float64) (*blob.B
 		return nil, err
 	}
 
-	//TODO 3 is constant?
 	w := blas64.General{
 		Rows:   conv.numOutput,
-		Cols:   int(conv.kernel[0] * conv.kernel[0] * 3),
-		Stride: int(conv.kernel[0] * conv.kernel[0] * 3),
+		Cols:   int(conv.kernel[0] * conv.kernel[0] * channels),
+		Stride: int(conv.kernel[0] * conv.kernel[0] * channels),
 		Data:   weight,
 	}
 	c := blas64.General{
@@ -118,12 +117,33 @@ func (conv *ConvLayer) forwardGemm(bottom *blob.Blob, weight []float64) (*blob.B
 
 	return &blob.Blob{
 		Data:     c.Data,
-		Shape:    []int32{int32(data.Rows), int32(data.Cols)},
+		Shape:    []int32{int32(1), int32(1), int32(data.Rows), int32(data.Cols)},
 		Count:    data.Rows * data.Cols,
 		Capacity: data.Rows * data.Cols,
 	}, nil
 }
 
 func (conv *ConvLayer) forwardBias(top *blob.Blob, bias []float64) error {
-	return nil
+	out := blas64.General{
+		Rows:   top.Height(),
+		Cols:   top.Width(),
+		Stride: top.Height() * top.Width(),
+		Data:   top.Data,
+	}
+	b := blas64.General{
+		Rows:   conv.numOutput,
+		Cols:   1,
+		Stride: 1,
+		Data:   bias,
+	}
+	multiplier := blase.General{
+		Rows:   conv.numOutput,
+		Cols:   1,
+		Stride: 1,
+		Data:   bias,
+	}
+	out, err := utils.GocaffeGemm(blas.NoTrans, blas.NoTrans, float64(1), b, multiplier, float64(1), out)
+	if err != nil {
+		return err
+	}
 }
