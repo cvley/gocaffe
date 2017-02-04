@@ -9,13 +9,14 @@ import (
 
 	"github.com/cvley/gocaffe/blob"
 	pb "github.com/cvley/gocaffe/proto"
-	"github.com/cvley/gocaffe/utils"
 )
 
+// ConvLayer implement convolution layer struct.
 type ConvLayer struct {
+	Bottom []string
+	Top    []string
+
 	ConvParam *pb.ConvolutionParameter
-	Bottom    []string
-	Top       []string
 
 	numOutput int
 	group     int
@@ -28,6 +29,8 @@ type ConvLayer struct {
 	bias      *blob.Blob
 }
 
+// NewConvolutionLayer implements the convolution layer construction from
+// parameters.
 func NewConvolutionLayer(param *pb.V1LayerParameter) (*ConvLayer, error) {
 	convParam := param.GetConvolutionParam()
 	if convParam == nil {
@@ -36,9 +39,9 @@ func NewConvolutionLayer(param *pb.V1LayerParameter) (*ConvLayer, error) {
 
 	//TODO: compatibility
 	convLayer := &ConvLayer{
-		ConvParam: convParam,
 		Bottom:    param.GetBottom(),
 		Top:       param.GetTop(),
+		ConvParam: convParam,
 		numOutput: int(convParam.GetNumOutput()),
 		group:     int(convParam.GetGroup()),
 		pad:       convParam.GetPad(),
@@ -69,11 +72,8 @@ func NewConvolutionLayer(param *pb.V1LayerParameter) (*ConvLayer, error) {
 func (conv *ConvLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 	top := []*blob.Blob{}
 	for _, v := range bottom {
-		data, err := conv.forwardGemm(v, conv.weight.Data)
+		data, err := conv.forward(v)
 		if err != nil {
-			return nil, err
-		}
-		if err := conv.forwardBias(data, conv.bias.Data); err != nil {
 			return nil, err
 		}
 		top = append(top, data)
@@ -82,68 +82,82 @@ func (conv *ConvLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 	return top, nil
 }
 
+// Backward implement the gradient update
 func (conv *ConvLayer) Backward(bottom, top []*blob.Blob, propagateDown []bool) {
 	// not implement yet, only forward is enough
 }
 
+// Type of Layer
 func (conv *ConvLayer) Type() string {
 	return "ConvolutionLayer"
 }
 
-func (conv *ConvLayer) forwardGemm(bottom *blob.Blob, weight []float64) (*blob.Blob, error) {
-	channels := int(bottom.Channels())
-	height := int(bottom.Height())
-	width := int(bottom.Width())
-	data, err := utils.Im2col(bottom.Data, channels, height, width,
-		int(conv.kernel[0]), int(conv.kernel[0]), int(conv.pad[0]), int(conv.pad[0]),
-		int(conv.stride[0]), int(conv.stride[0]), int(conv.dilation[0]), int(conv.dilation[0]))
-	if err != nil {
-		return nil, err
-	}
+func (conv *ConvLayer) forward(bottom *blob.Blob) (*blob.Blob, error) {
+	// TODO: too many params, maybe use conv param is better?
+	dataCols, outW, outH := im2col(bottom, conv.kernel[0], conv.kernel[0], conv.pad[0], conv.pad[0], conv.stride[0], conv.stride[0], conv.dilation[0], conv.dilation[0])
 
+	cols := int(conv.kernel[0]*conv.kernel[0]) * int(bottom.Channels())
 	w := blas64.General{
+		Cols:   cols,
 		Rows:   conv.numOutput,
-		Cols:   int(conv.kernel[0] * conv.kernel[0] * channels),
-		Stride: int(conv.kernel[0] * conv.kernel[0] * channels),
-		Data:   weight,
+		Stride: cols,
+		Data:   conv.weight.Data,
 	}
 	c := blas64.General{
-		Rows:   conv.numOutput,
-		Cols:   data.Cols,
-		Stride: data.Cols,
-		Data:   make([]float64, conv.numOutput*data.Cols),
+		Cols:   conv.numOutput,
+		Rows:   cols,
+		Stride: conv.numOutput,
+		Data:   make([]float64, conv.numOutput*cols),
 	}
-	blas64.Gemm(blas.NoTrans, blas.NoTrans, float64(1), w, data, float64(0), c)
+	blas64.Gemm(blas.NoTrans, blas.NoTrans, 1.0, dataCols, w, 0.0, c)
 
 	return &blob.Blob{
 		Data:     c.Data,
-		Shape:    []int32{int32(1), int32(1), int32(data.Rows), int32(data.Cols)},
-		Count:    data.Rows * data.Cols,
-		Capacity: data.Rows * data.Cols,
+		Shape:    []int32{bottom.Num(), int32(conv.numOutput), outW, outH},
+		Count:    dataCols.Rows * dataCols.Cols,
+		Capacity: dataCols.Rows * dataCols.Cols,
 	}, nil
 }
 
-func (conv *ConvLayer) forwardBias(top *blob.Blob, bias []float64) error {
-	out := blas64.General{
-		Rows:   top.Height(),
-		Cols:   top.Width(),
-		Stride: top.Height() * top.Width(),
-		Data:   top.Data,
+func im2col(data *blob.Blob, kernelH, kernelW, padH, padW, strideH, strideW, dilationH, dilationW uint32) (blas64.General, int32, int32) {
+	channels := int(data.Channels())
+	width := uint32(data.Width())
+	height := uint32(data.Height())
+
+	outH := (height + padH*2 - (dilationH*(kernelH-1))/strideH) + 1
+	outW := (width + padW*2 - (dilationW*(kernelW-1))/strideW) + 1
+	outData := blas64.General{
+		Cols:   int(outH * outW),
+		Rows:   channels * int(kernelH * kernelW),
+		Stride: channels * int(kernelH * kernelW),
+		Data:   make([]float64, outH*outW*uint32(channels)*kernelH*kernelW),
 	}
-	b := blas64.General{
-		Rows:   conv.numOutput,
-		Cols:   1,
-		Stride: 1,
-		Data:   bias,
+
+	idx := 0
+	for channel := 0; channel < channels; channel++ {
+		for kRow := 0; kRow < int(kernelH); kRow++ {
+			for kCol := 0; kCol < int(kernelW); kCol++ {
+				inRow := -padH + uint32(kRow)*dilationH
+				for outRow := 0; outRow < int(outH); outRow++ {
+					if inRow >= 0 && inRow < height {
+						inCol := -padW + uint32(kCol)*dilationW
+						for outCol := 0; outCol < int(outW); outCol++ {
+							if inCol >= 0 && inCol < width {
+								outData.Data[idx] = data.Data[inRow*width+inCol+uint32(channel)*width*height]
+							}
+							inCol += strideW
+							idx++
+						}
+					} else {
+						for outCol := 0; outCol < int(outW); outCol++ {
+							idx++
+						}
+					}
+					inRow += strideH
+				}
+			}
+		}
 	}
-	multiplier := blase.General{
-		Rows:   conv.numOutput,
-		Cols:   1,
-		Stride: 1,
-		Data:   bias,
-	}
-	out, err := utils.GocaffeGemm(blas.NoTrans, blas.NoTrans, float64(1), b, multiplier, float64(1), out)
-	if err != nil {
-		return err
-	}
+
+	return outData, int32(outW), int32(outH)
 }
