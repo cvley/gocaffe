@@ -44,7 +44,7 @@ func (net *Net) CopyTrainedLayersFromFile(file string) (*Net, error) {
 			if err != nil {
 				log.Println(err)
 			}
-			log.Printf("==%+v", l)
+			log.Printf("%+v", l)
 		}
 	}
 

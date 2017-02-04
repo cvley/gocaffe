@@ -97,6 +97,8 @@ func (conv *ConvLayer) forward(bottom *blob.Blob) (*blob.Blob, error) {
 	dataCols, outW, outH := im2col(bottom, conv.kernel[0], conv.kernel[0], conv.pad[0], conv.pad[0], conv.stride[0], conv.stride[0], conv.dilation[0], conv.dilation[0])
 
 	cols := int(conv.kernel[0]*conv.kernel[0]) * int(bottom.Channels())
+
+	// convolution
 	w := blas64.General{
 		Cols:   cols,
 		Rows:   conv.numOutput,
@@ -110,6 +112,25 @@ func (conv *ConvLayer) forward(bottom *blob.Blob) (*blob.Blob, error) {
 		Data:   make([]float64, conv.numOutput*cols),
 	}
 	blas64.Gemm(blas.NoTrans, blas.NoTrans, 1.0, dataCols, w, 0.0, c)
+
+	// bias
+	b := blas64.General{
+		Cols:   1,
+		Rows:   conv.numOutput,
+		Stride: 1,
+		Data:   conv.bias.Data,
+	}
+	ones := make([]float64, int(outH*outW))
+	for i, _ := range ones {
+		ones[i] = 1.0
+	}
+	bMultiplier := blas64.General{
+		Cols:   int(outH * outW),
+		Rows:   1,
+		Stride: int(outH * outW),
+		Data:   ones,
+	}
+	blas64.Gemm(blas.NoTrans, blas.NoTrans, 1.0, bMultiplier, b, 0.0, c)
 
 	return &blob.Blob{
 		Data:     c.Data,
@@ -128,8 +149,8 @@ func im2col(data *blob.Blob, kernelH, kernelW, padH, padW, strideH, strideW, dil
 	outW := (width + padW*2 - (dilationW*(kernelW-1))/strideW) + 1
 	outData := blas64.General{
 		Cols:   int(outH * outW),
-		Rows:   channels * int(kernelH * kernelW),
-		Stride: channels * int(kernelH * kernelW),
+		Rows:   channels * int(kernelH*kernelW),
+		Stride: channels * int(kernelH*kernelW),
 		Data:   make([]float64, outH*outW*uint32(channels)*kernelH*kernelW),
 	}
 
