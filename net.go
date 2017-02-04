@@ -3,7 +3,6 @@ package net
 import (
 	"io/ioutil"
 	"log"
-	//	"fmt"
 	"os"
 
 	"github.com/cvley/gocaffe/layer"
@@ -12,6 +11,10 @@ import (
 )
 
 type Net struct {
+	name           string
+	layers         []layer.Layer
+	layerNames     []string
+	layerNameIndex map[string]int
 }
 
 func (net *Net) CopyTrainedLayersFromParam(netParam *pb.NetParameter) (*Net, error) {
@@ -36,15 +39,19 @@ func (net *Net) CopyTrainedLayersFromFile(file string) (*Net, error) {
 		return nil, err
 	}
 
+	net.name = param.GetName()
 	log.Printf("construct %s", param.GetName())
 
 	for _, layerParam := range param.GetLayers() {
-		if layerParam.GetName() == "conv1" {
+		switch layerParam.GetType() {
+		case pb.V1LayerParameter_CONVOLUTION:
+			log.Printf("get layer %s", layerParam.GetName())
 			l, err := layer.NewConvolutionLayer(layerParam)
 			if err != nil {
 				log.Println(err)
 			}
 			log.Printf("%+v", l)
+		case pb.V1LayerParameter_POOLING:
 		}
 	}
 
