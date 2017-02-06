@@ -134,39 +134,39 @@ func (conv *ConvLayer) forward(bottom *blob.Blob) (*blob.Blob, error) {
 
 	return &blob.Blob{
 		Data:     c.Data,
-		Shape:    []int32{bottom.Num(), int32(conv.numOutput), outW, outH},
+		Shape:    []int{bottom.Num(), conv.numOutput, outW, outH},
 		Count:    dataCols.Rows * dataCols.Cols,
 		Capacity: dataCols.Rows * dataCols.Cols,
 	}, nil
 }
 
-func im2col(data *blob.Blob, kernelH, kernelW, padH, padW, strideH, strideW, dilationH, dilationW uint32) (blas64.General, int32, int32) {
-	channels := int(data.Channels())
-	width := uint32(data.Width())
-	height := uint32(data.Height())
+func im2col(data *blob.Blob, kernelH, kernelW, padH, padW, strideH, strideW, dilationH, dilationW uint32) (blas64.General, int, int) {
+	channels := data.Channels()
+	width := data.Width()
+	height := data.Height()
 
-	outH := (height + padH*2 - (dilationH*(kernelH-1))/strideH) + 1
-	outW := (width + padW*2 - (dilationW*(kernelW-1))/strideW) + 1
+	outH := (height + int(padH)*2 - int(dilationH*(kernelH-1))/int(strideH)) + 1
+	outW := (width + int(padW)*2 - int(dilationW*(kernelW-1))/int(strideW)) + 1
 	outData := blas64.General{
 		Cols:   int(outH * outW),
 		Rows:   channels * int(kernelH*kernelW),
 		Stride: channels * int(kernelH*kernelW),
-		Data:   make([]float64, outH*outW*uint32(channels)*kernelH*kernelW),
+		Data:   make([]float64, outH*outW*channels*int(kernelH*kernelW)),
 	}
 
 	idx := 0
 	for channel := 0; channel < channels; channel++ {
 		for kRow := 0; kRow < int(kernelH); kRow++ {
 			for kCol := 0; kCol < int(kernelW); kCol++ {
-				inRow := -padH + uint32(kRow)*dilationH
-				for outRow := 0; outRow < int(outH); outRow++ {
+				inRow := -int(padH) + kRow*int(dilationH)
+				for outRow := 0; outRow < outH; outRow++ {
 					if inRow >= 0 && inRow < height {
-						inCol := -padW + uint32(kCol)*dilationW
-						for outCol := 0; outCol < int(outW); outCol++ {
+						inCol := -int(padW) + kCol*int(dilationW)
+						for outCol := 0; outCol < outW; outCol++ {
 							if inCol >= 0 && inCol < width {
-								outData.Data[idx] = data.Data[inRow*width+inCol+uint32(channel)*width*height]
+								outData.Data[idx] = data.Data[inRow*width+inCol+channel*width*height]
 							}
-							inCol += strideW
+							inCol += int(strideW)
 							idx++
 						}
 					} else {
@@ -174,11 +174,11 @@ func im2col(data *blob.Blob, kernelH, kernelW, padH, padW, strideH, strideW, dil
 							idx++
 						}
 					}
-					inRow += strideH
+					inRow += int(strideH)
 				}
 			}
 		}
 	}
 
-	return outData, int32(outW), int32(outH)
+	return outData, outW, outH
 }

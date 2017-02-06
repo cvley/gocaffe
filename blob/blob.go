@@ -16,7 +16,7 @@ type Blob struct {
 	Data      []float64
 	Diff      []float64
 	ShapeData []float64
-	Shape    []int32
+	Shape     []int
 	Count     int
 	Capacity  int
 }
@@ -30,16 +30,16 @@ func New() *Blob {
 func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 	// get shape
 	if reshape {
-		shape := []int32{}
+		shape := []int{}
 		if other.GetHeight() != 0 || other.GetChannels() != 0 || other.GetNum() != 0 || other.GetWidth() != 0 {
-			shape = append(shape, other.GetNum())
-			shape = append(shape, other.GetChannels())
-			shape = append(shape, other.GetHeight())
-			shape = append(shape, other.GetWidth())
+			shape = append(shape, int(other.GetNum()))
+			shape = append(shape, int(other.GetChannels()))
+			shape = append(shape, int(other.GetHeight()))
+			shape = append(shape, int(other.GetWidth()))
 		} else {
 			blobShape := other.GetShape()
 			for _, v := range blobShape.GetDim() {
-				shape = append(shape, int32(v))
+				shape = append(shape, int(v))
 			}
 		}
 		b.Reshape(shape)
@@ -115,20 +115,23 @@ func (b *Blob) CanonicalAxisIndex(index int) int {
 }
 
 func (b *Blob) ShapeEquals(other *pb.BlobProto) bool {
-	if other.GetHeight() != 0 || other.GetChannels() != 0 || other.GetNum() != 0 || other.GetWidth() != 0 {
-		return len(b.Shape) <= 4 && b.LegacyShape(-4) == other.GetNum() && b.LegacyShape(-3) == other.GetChannels() && b.LegacyShape(-2) == other.GetHeight() && b.LegacyShape(-1) == other.GetWidth()
+	if other.GetHeight() != 0 || other.GetChannels() != 0 ||
+		other.GetNum() != 0 || other.GetWidth() != 0 {
+		return len(b.Shape) <= 4 && b.LegacyShape(-4) == int(other.GetNum()) &&
+			b.LegacyShape(-3) == int(other.GetChannels()) && b.LegacyShape(-2) == int(other.GetHeight()) &&
+			b.LegacyShape(-1) == int(other.GetWidth())
 	}
 
 	otherShape := other.GetShape().GetDim()
 	for i, v := range otherShape {
-		if b.Shape[i] != int32(v) {
+		if b.Shape[i] != int(v) {
 			return false
 		}
 	}
 	return true
 }
 
-func (b *Blob) Reshape(shape []int32) {
+func (b *Blob) Reshape(shape []int) {
 	if len(shape) > kMaxBlobAxes {
 		panic("blob shape dimensions larger than max blob axes")
 	}
@@ -136,7 +139,7 @@ func (b *Blob) Reshape(shape []int32) {
 	b.Count = 1
 
 	// reset size of shape and shapeData
-	b.Shape = make([]int32, len(shape))
+	b.Shape = make([]int, len(shape))
 	if b.Shape != nil || len(b.Shape) < len(shape) {
 		b.ShapeData = make([]float64, len(shape))
 	}
@@ -167,9 +170,9 @@ func (b *Blob) ReshapeFromBlobShape(blobShape *pb.BlobShape) {
 		panic("blob shape dimensions larger than max blob axes")
 	}
 
-	shape := make([]int32, len(blobShape.GetDim()))
+	shape := make([]int, len(blobShape.GetDim()))
 	for i, v := range blobShape.GetDim() {
-		shape[i] = int32(v)
+		shape[i] = int(v)
 	}
 
 	b.Reshape(shape)
@@ -189,7 +192,7 @@ func (b *Blob) String() string {
 	return buffers.String()
 }
 
-func (b *Blob) ShapeOfIndex(index int) int32 {
+func (b *Blob) ShapeOfIndex(index int) int {
 	return b.Shape[index]
 }
 
@@ -197,23 +200,23 @@ func (b *Blob) AxesNum() int {
 	return len(b.Shape)
 }
 
-func (b *Blob) Num() int32 {
+func (b *Blob) Num() int {
 	return b.LegacyShape(0)
 }
 
-func (b *Blob) Channels() int32 {
+func (b *Blob) Channels() int {
 	return b.LegacyShape(1)
 }
 
-func (b *Blob) Height() int32 {
+func (b *Blob) Height() int {
 	return b.LegacyShape(2)
 }
 
-func (b *Blob) Width() int32 {
+func (b *Blob) Width() int {
 	return b.LegacyShape(3)
 }
 
-func (b *Blob) LegacyShape(index int) int32 {
+func (b *Blob) LegacyShape(index int) int {
 	if b.AxesNum() > 4 {
 		panic("cannot use legacy accessors on Blobs with > 4 axes.")
 	}
@@ -228,16 +231,16 @@ func (b *Blob) LegacyShape(index int) int32 {
 	return b.Shape[index]
 }
 
-func (b *Blob) offset(indices []int32) int32 {
+func (b *Blob) Offset(indices []int) int {
 	if len(indices) > b.AxesNum() {
 		panic("offset: indices larger than blob axes number")
 	}
 
-	offset := int32(0)
+	offset := 0
 	for i := 0; i < b.AxesNum(); i++ {
 		offset *= b.Shape[i]
 		if len(indices) > i {
-			if indices[i] > int32(0) && indices[i] < b.Shape[i] {
+			if indices[i] > 0 && indices[i] < b.Shape[i] {
 				offset += indices[i]
 			}
 		}
@@ -246,12 +249,12 @@ func (b *Blob) offset(indices []int32) int32 {
 	return offset
 }
 
-func (b *Blob) dataAt(index []int32) float64 {
-	return b.Data[b.offset(index)]
+func (b *Blob) DataAt(index []int) float64 {
+	return b.Data[b.Offset(index)]
 }
 
-func (b *Blob) diffAt(index []int32) float64 {
-	return b.Diff[b.offset(index)]
+func (b *Blob) DiffAt(index []int) float64 {
+	return b.Diff[b.Offset(index)]
 }
 
 // AsumData compute the sum of absolute values (L1 norm) of the data
