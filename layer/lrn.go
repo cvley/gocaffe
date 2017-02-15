@@ -30,10 +30,32 @@ func NewLRNLayer(params *pb.V1LayerParameter) (Layer, error) {
 	if size%2 == 0 {
 		return nil, errors.New("LRN only supports odd values for local size.")
 	}
-	return nil, nil
+
+	prePad := (size - 1) / 2
+	alpha := float64(param.GetAlpha())
+	beta := float64(param.GetBeta())
+	k := float64(param.GetK())
+	return &LrnLayer{
+		Params: param,
+		size:   size,
+		prePad: prePad,
+		alpha:  alpha,
+		beta:   beta,
+		k:      k,
+	}, nil
 }
 
 func (lrn *LrnLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
+	if bottom[0].AxesNum() != 4 {
+		return nil, errors.New("Input must have 4 axes, corresponding to (num, channels, height, width)")
+	}
+
+	switch lrn.Params.GetNormRegion() {
+	case pb.LRNParameter_ACROSS_CHANNELS:
+	case pb.LRNParameter_WITHIN_CHANNEL:
+	default:
+		return nil, errors.New("Unknown normalization region.")
+	}
 	return nil, nil
 }
 
