@@ -62,3 +62,11 @@ func (lrn *LrnLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 func (lrn *LrnLayer) Type() string {
 	return "LRN"
 }
+
+func (lrn *LrnLayer) crossChannelForward(bottom []*blob.Blob) ([]*blob.Blob, error) {
+
+}
+
+func (lrn *LrnLayer) withinChannelForward(bottom []*blob.Blob) ([]*blob.Blob, error) {
+
+}
