@@ -52,11 +52,14 @@ func (lrn *LrnLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 
 	switch lrn.Params.GetNormRegion() {
 	case pb.LRNParameter_ACROSS_CHANNELS:
+		return lrn.crossChannelForward(bottom)
+
 	case pb.LRNParameter_WITHIN_CHANNEL:
+		return lrn.withinChannelForward(bottom)
+
 	default:
 		return nil, errors.New("Unknown normalization region.")
 	}
-	return nil, nil
 }
 
 func (lrn *LrnLayer) Type() string {
@@ -64,9 +67,24 @@ func (lrn *LrnLayer) Type() string {
 }
 
 func (lrn *LrnLayer) crossChannelForward(bottom []*blob.Blob) ([]*blob.Blob, error) {
+	scaleData := blob.New()
+	scaleData.ReshapeLike(bottom[0])
+	// start with the constant value
+	for i := 0; i < scaleData.Count; i++ {
+		scaleData.Data[i] = lrn.k
+	}
 
+	paddedSquare := blob.New()
+	paddedSquare.Reshape([]int{
+		1,
+		bottom[0].Channels() + lrn.size - 1,
+		bottom[0].Height(),
+		bottom[0].Width(),
+	})
+
+	alphaOverSize := lrn.alpha / lrn.size
+	// go through the images
 }
 
 func (lrn *LrnLayer) withinChannelForward(bottom []*blob.Blob) ([]*blob.Blob, error) {
-
 }
