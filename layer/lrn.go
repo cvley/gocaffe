@@ -2,6 +2,7 @@ package layer
 
 import (
 	"errors"
+	"math"
 	"log"
 
 	"github.com/cvley/gocaffe/blob"
@@ -37,8 +38,8 @@ func NewLRNLayer(params *pb.V1LayerParameter) (Layer, error) {
 	k := float64(param.GetK())
 	return &LrnLayer{
 		Params: param,
-		size:   size,
-		prePad: prePad,
+		size:   int(size),
+		prePad: int(prePad),
 		alpha:  alpha,
 		beta:   beta,
 		k:      k,
@@ -76,15 +77,32 @@ func (lrn *LrnLayer) crossChannelForward(bottom []*blob.Blob) ([]*blob.Blob, err
 
 	paddedSquare := blob.New()
 	paddedSquare.Reshape([]int{
-		1,
+		bottom[0].Num(),
 		bottom[0].Channels() + lrn.size - 1,
 		bottom[0].Height(),
 		bottom[0].Width(),
 	})
 
-	alphaOverSize := lrn.alpha / lrn.size
+	alphaOverSize := lrn.alpha / float64(lrn.size)
 	// go through the images
+	for n := 0; n < bottom[0].Num(); n++ {
+		// compute the padded square
+		sqrData := make([]float64, bottom[0].Capacity)
+		for c := 0; c < bottom[0].Channels(); c++ {
+			for h := 0; h < bottom[0].Height(); h++ {
+				for w := 0; w < bottom[0].Width(); w++ {
+					sqrData[bottom[0].Width()*bottom[0].Height()*c+bottom[0].Width()+w] = math.Pow(bottom[0].DataAt([]int{n, c, h, w}), 2)
+				}
+			}
+
+		}
+		paddedSquare.Data = sqrData
+		// create the first channel scale
+	}
+
+	return nil, nil
 }
 
 func (lrn *LrnLayer) withinChannelForward(bottom []*blob.Blob) ([]*blob.Blob, error) {
+	return nil, nil
 }
