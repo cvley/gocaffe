@@ -7,7 +7,6 @@ import (
 	"math"
 
 	pb "github.com/cvley/gocaffe/proto"
-	"github.com/gonum/blas/blas64"
 )
 
 const kMaxBlobAxes = 32
@@ -259,30 +258,54 @@ func (b *Blob) DiffAt(index []int) float64 {
 
 // AsumData compute the sum of absolute values (L1 norm) of the data
 func (b *Blob) AsumData() float64 {
-	return blas64.Asum(b.Count, blas64.Vector{Data: b.Data})
+	var sum float64
+	for _, v := range b.Data {
+		sum += math.Abs(v)
+	}
+	return sum
 }
 
 // AsumDiff compute the sum of absolute values (L1 norm) of the diff
 func (b *Blob) AsumDiff() float64 {
-	return blas64.Asum(b.Count, blas64.Vector{Data: b.Diff})
+	var sum float64
+	for _, v := range b.Diff {
+		sum += math.Abs(v)
+	}
+	return sum
 }
 
 // SumSquareData compute the sum of squares (L2 norm squared) of the data
 func (b *Blob) SumSquareData() float64 {
-	return blas64.Dot(b.Count, blas64.Vector{Data: b.Data}, blas64.Vector{Data: b.Data})
+	var sum float64
+	for _, v := range b.Data {
+		sum += v * v
+	}
+	return sum
 }
 
 // SumSquareDiff compute the sum of squares (L2 norm squared) of the diff
 func (b *Blob) SumSquareDiff() float64 {
-	return blas64.Dot(b.Count, blas64.Vector{Data: b.Diff}, blas64.Vector{Data: b.Diff})
+	var sum float64
+	for _, v := range b.Diff {
+		sum += v * v
+	}
+	return sum
 }
 
 // ScaleData scale the blob data by a constant factor
 func (b *Blob) ScaleData(scale float64) {
-	blas64.Scal(b.Count, scale, blas64.Vector{Data: b.Data})
+	data := make([]float64, len(b.Data))
+	for i, v := range b.Data {
+		data[i] = v * scale
+	}
+	copy(b.Data, data)
 }
 
 // ScaleDiff scale the blob diff by a constant factor
 func (b *Blob) ScaleDiff(scale float64) {
-	blas64.Scal(b.Count, scale, blas64.Vector{Data: b.Diff})
+	diff := make([]float64, len(b.Diff))
+	for i, v := range b.Diff {
+		diff[i] = v * scale
+	}
+	copy(b.Diff, diff)
 }
