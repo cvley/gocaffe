@@ -14,7 +14,6 @@ const kMaxBlobAxes = 32
 type Blob struct {
 	Data      []float64
 	Diff      []float64
-	ShapeData []float64
 	Shape     []int
 	Count     int
 	Capacity  int
@@ -137,11 +136,8 @@ func (b *Blob) Reshape(shape []int) {
 
 	b.Count = 1
 
-	// reset size of shape and shapeData
+	// reset size of shape
 	b.Shape = make([]int, len(shape))
-	if b.Shape != nil || len(b.Shape) < len(shape) {
-		b.ShapeData = make([]float64, len(shape))
-	}
 
 	for i, v := range shape {
 		if v < 0 {
@@ -153,7 +149,6 @@ func (b *Blob) Reshape(shape []int) {
 			}
 			b.Count *= int(v)
 			b.Shape[i] = v
-			b.ShapeData = append(b.ShapeData, float64(v))
 		}
 	}
 
