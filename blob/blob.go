@@ -19,7 +19,6 @@ type Blob struct {
 	Data     []float64
 	Diff     []float64
 	Shape    []int
-	Count    int
 	Capacity int
 }
 
@@ -77,7 +76,7 @@ func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 
 	// copy data
 	if len(other.GetData()) > 0 {
-		if b.Count != len(other.GetData()) {
+		if b.Capacity != len(other.GetData()) {
 			return errors.New("get data fail: count mismatch data length")
 		}
 		b.Data = make([]float64, len(other.GetData()))
@@ -85,14 +84,14 @@ func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 			b.Data[i] = float64(v)
 		}
 	} else if len(other.GetDoubleData()) > 0 {
-		if b.Count != len(other.GetDoubleData()) {
+		if b.Capacity != len(other.GetDoubleData()) {
 			return errors.New("get double data fail: count mismatch data length")
 		}
-		b.Data = other.GetDoubleData()
+		copy(b.Data, other.GetDoubleData())
 	}
 
 	if len(other.GetDiff()) > 0 {
-		if b.Count != len(other.GetDiff()) {
+		if b.Capacity != len(other.GetDiff()) {
 			return errors.New("get diff fail: count mismatch data length")
 		}
 		b.Diff = make([]float64, len(other.GetDiff()))
@@ -100,10 +99,10 @@ func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
 			b.Diff[i] = float64(v)
 		}
 	} else if len(other.GetDoubleDiff()) > 0 {
-		if b.Count != len(other.GetDoubleDiff()) {
+		if b.Capacity != len(other.GetDoubleDiff()) {
 			return errors.New("get double diff fail: count mismatch data length")
 		}
-		b.Diff = other.GetDoubleDiff()
+		copy(b.Diff, other.GetDoubleDiff())
 	}
 
 	return nil
@@ -157,34 +156,30 @@ func (b *Blob) ShapeEquals(other *pb.BlobProto) bool {
 	return true
 }
 
-func (b *Blob) Reshape(shape []int) {
+func (b *Blob) Reshape(shape []int) error {
 	if len(shape) > kMaxBlobAxes {
 		panic("blob shape dimensions larger than max blob axes")
 	}
 
-	b.Count = 1
+	count := 1
+	for _, v := range shape {
+		if v < 0 {
+			return errors.New("invalid shape value")
+		}
+		count *= v
+	}
 
 	// reset size of shape
 	b.Shape = make([]int, len(shape))
+	copy(b.Shape, shape)
 
-	for i, v := range shape {
-		if v < 0 {
-			panic("shape value invalid")
-		}
-		if b.Count != 0 {
-			if int(v) > math.MaxInt64/b.Count {
-				panic("blob size exceeds MaxInt64")
-			}
-			b.Count *= int(v)
-			b.Shape[i] = v
-		}
+	if count > b.Capacity {
+		b.Capacity = count
+		b.Data = make([]float64, count)
+		b.Diff = make([]float64, count)
 	}
 
-	if b.Count > b.Capacity {
-		b.Capacity = b.Count
-		b.Data = make([]float64, b.Capacity)
-		b.Diff = make([]float64, b.Capacity)
-	}
+	return nil
 }
 
 func (b *Blob) ReshapeFromBlobShape(blobShape *pb.BlobShape) {
@@ -209,7 +204,7 @@ func (b *Blob) String() string {
 	for _, v := range b.Shape {
 		buffers.WriteString(fmt.Sprintf("%d ", v))
 	}
-	buffers.WriteString(fmt.Sprintf("(%d)", b.Count))
+	buffers.WriteString(fmt.Sprintf("(%d)", b.Capacity))
 
 	return buffers.String()
 }
