@@ -11,18 +11,46 @@ import (
 
 const kMaxBlobAxes = 32
 
+var (
+	ErrEmptyBlob = errors.New("blob is empty")
+)
+
 type Blob struct {
-	Data      []float64
-	Diff      []float64
-	Shape     []int
-	Count     int
-	Capacity  int
+	Data     []float64
+	Diff     []float64
+	Shape    []int
+	Count    int
+	Capacity int
 }
 
 func New() *Blob {
 	return &Blob{
 		Capacity: 0,
 	}
+}
+
+func (b *Blob) InitData(v float64) error {
+	if b.Capacity == 0 {
+		return ErrEmptyBlob
+	}
+
+	for i := 0; i < b.Capacity; i++ {
+		b.Data[i] = v
+	}
+
+	return nil
+}
+
+func (b *Blob) InitDiff(v float64) error {
+	if b.Capacity == 0 {
+		return ErrEmptyBlob
+	}
+
+	for i := 0; i < b.Capacity; i++ {
+		b.Diff[i] = v
+	}
+
+	return nil
 }
 
 func (b *Blob) FromProto(other *pb.BlobProto, reshape bool) error {
@@ -92,7 +120,7 @@ func (b *Blob) ToProto(writeDiff bool) *pb.BlobProto {
 	}
 
 	if writeDiff {
-		if b.Diff != nil {
+		if len(b.Diff) != 0 {
 			proto.DoubleDiff = b.Diff
 		}
 	}
@@ -225,6 +253,7 @@ func (b *Blob) LegacyShape(index int) int {
 	return b.Shape[index]
 }
 
+//TODO remove offset, return a desired Blob
 func (b *Blob) Offset(indices []int) int {
 	if len(indices) > b.AxesNum() {
 		panic("offset: indices larger than blob axes number")
