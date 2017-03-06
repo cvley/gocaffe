@@ -13,9 +13,12 @@ import (
 
 const maxBlobAxes = 32
 
+// Type represents process data or diff
+type Type int
+
 const (
 	// ToData will get or update data in Blob
-	ToData = iota
+	ToData Type = iota
 	// ToDiff will get or update diff in Blob
 	ToDiff
 )
@@ -58,7 +61,7 @@ func New(shape []int) (*Blob, error) {
 }
 
 // Init returns Blob with input shape, initialise with input value and type
-func Init(shape []int, v float64, tp int) (*Blob, error) {
+func Init(shape []int, v float64, tp Type) (*Blob, error) {
 	b, err := New(shape)
 	if err != nil {
 		return nil, err
@@ -272,7 +275,7 @@ func (b *Blob) Range(indices1, indices2 []int) (*Blob, error) {
 }
 
 // Set will set value in the index with input type
-func (b *Blob) Set(index []int, value float64, tp int) {
+func (b *Blob) Set(index []int, value float64, tp Type) {
 	switch tp {
 	case ToData:
 		b.data[b.Offset(index)] = value
@@ -286,7 +289,7 @@ func (b *Blob) Set(index []int, value float64, tp int) {
 }
 
 // Get returns the value in the input index based on the type
-func (b *Blob) Get(index []int, tp int) float64 {
+func (b *Blob) Get(index []int, tp Type) float64 {
 	switch tp {
 	case ToData:
 		return b.data[b.Offset(index)]
@@ -299,7 +302,7 @@ func (b *Blob) Get(index []int, tp int) float64 {
 }
 
 // L1Norm compute the sum of absolute values (L1 norm) of the data or diff
-func (b *Blob) L1Norm(tp int) float64 {
+func (b *Blob) L1Norm(tp Type) float64 {
 	var sum float64
 	switch tp {
 	case ToData:
@@ -317,7 +320,7 @@ func (b *Blob) L1Norm(tp int) float64 {
 }
 
 // L2Norm compute the sum of squares (L2 norm squared) of the data or diff
-func (b *Blob) L2Norm(tp int) float64 {
+func (b *Blob) L2Norm(tp Type) float64 {
 	var sum float64
 	switch tp {
 	case ToData:
@@ -336,7 +339,7 @@ func (b *Blob) L2Norm(tp int) float64 {
 }
 
 // Scale scale the blob data or diff by a constant factor
-func (b *Blob) Scale(scale float64, tp int) {
+func (b *Blob) Scale(scale float64, tp Type) {
 	switch tp {
 	case ToData:
 		for i, v := range b.data {
@@ -351,7 +354,7 @@ func (b *Blob) Scale(scale float64, tp int) {
 }
 
 // Add will add the data or diff by a input blob
-func (b *Blob) Add(other *Blob, tp int) error {
+func (b *Blob) Add(other *Blob, tp Type) error {
 	if !b.ShapeEquals(other) {
 		return errors.New("blob add data fail, mismatch shape")
 	}
@@ -371,7 +374,7 @@ func (b *Blob) Add(other *Blob, tp int) error {
 }
 
 // Mul will multiply data or diff by a input blob
-func (b *Blob) Mul(other *Blob, tp int) error {
+func (b *Blob) Mul(other *Blob, tp Type) error {
 	if !b.ShapeEquals(other) {
 		return errors.New("blob add data fail, mismatch shape")
 	}
