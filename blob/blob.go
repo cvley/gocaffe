@@ -207,6 +207,11 @@ func (b *Blob) Width() int {
 	return b.LegacyShape(3)
 }
 
+// Capacity returns the capacity of blob
+func (b *Blob) Capacity() int {
+	return b.capacity
+}
+
 // LegacyShape return index shape in the legacy
 func (b *Blob) LegacyShape(index int) int {
 	if b.AxesNum() > 4 {
