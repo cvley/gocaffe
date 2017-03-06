@@ -10,19 +10,20 @@ import (
 
 func TestNewBlob(t *testing.T) {
 	shape := []int{1, 1, 1, 1}
-	b := New()
-	b.Reshape(shape)
-	if len(b.Shape) != len(shape) {
-		t.Fatal("shape mismatch")
-	}
-	b.Data = []float64{0.1}
-
-	protobuf := b.ToProto(false)
-	data, err := proto.Marshal(protobuf)
+	b, err := New(shape)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("%v", protobuf)
+
+	if len(b.shape) != len(shape) {
+		t.Fatal("shape mismatch")
+	}
+	b.data = []float64{0.1}
+
+	protobuf, err := b.ToProto(false)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if b.AxesNum() != 4 {
 		t.Fatal("mismatch AxesNum")
@@ -45,25 +46,26 @@ func TestNewBlob(t *testing.T) {
 	}
 
 	pbuf := &pb.BlobProto{}
-	if err := proto.Unmarshal(data, pbuf); err != nil {
+	if err := proto.Unmarshal(protobuf, pbuf); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := b.FromProto(pbuf, true); err != nil {
+	newBlob, err := FromProto(pbuf)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	sum := b.AsumData()
+	sum := newBlob.L1Norm(ToData)
 	if math.Abs(sum-0.1) > 1e-8 {
 		t.Fatal("AsumData func fail")
 	}
 
-	b.ScaleData(0.1)
-	if math.Abs(b.Data[0]-0.01) > 1e-8 {
+	b.Scale(0.1, ToData)
+	if math.Abs(b.data[0]-0.01) > 1e-8 {
 		t.Fatal("ScaleData func fail")
 	}
 
-	sqrSum := b.SumSquareData()
+	sqrSum := b.L2Norm(ToData)
 	if math.Abs(sqrSum-0.0001) > 1e-8 {
 		t.Fatal("SumSquareData func fail")
 	}
