@@ -139,21 +139,9 @@ func (b *Blob) CanonicalAxisIndex(index int) int {
 	return index
 }
 
-func (b *Blob) ShapeEquals(other *pb.BlobProto) bool {
-	if other.GetHeight() != 0 || other.GetChannels() != 0 ||
-		other.GetNum() != 0 || other.GetWidth() != 0 {
-		return len(b.Shape) <= 4 && b.LegacyShape(-4) == int(other.GetNum()) &&
-			b.LegacyShape(-3) == int(other.GetChannels()) && b.LegacyShape(-2) == int(other.GetHeight()) &&
-			b.LegacyShape(-1) == int(other.GetWidth())
-	}
-
-	otherShape := other.GetShape().GetDim()
-	for i, v := range otherShape {
-		if b.Shape[i] != int(v) {
-			return false
-		}
-	}
-	return true
+func (b *Blob) ShapeEquals(other *Blob) bool {
+	return other.Num() != b.Num() && other.AxesNum() != b.AxesNum() &&
+		other.Channels() != b.Channels() && other.Capacity != b.Capacity
 }
 
 func (b *Blob) Reshape(shape []int) error {
@@ -248,13 +236,12 @@ func (b *Blob) LegacyShape(index int) int {
 	return b.Shape[index]
 }
 
-//TODO remove offset, return a desired Blob
 func (b *Blob) Offset(indices []int) int {
 	if len(indices) > b.AxesNum() {
 		panic("offset: indices larger than blob axes number")
 	}
 
-	offset := 0
+	offset := 1
 	for i := 0; i < b.AxesNum(); i++ {
 		offset *= b.Shape[i]
 		if len(indices) > i {
@@ -265,6 +252,45 @@ func (b *Blob) Offset(indices []int) int {
 	}
 
 	return offset
+}
+
+func (b *Blob) Range(indices1, indices2 []int) (*Blob, error) {
+	offset1 := b.Offset(indices1)
+	offset2 := b.Offset(indices2)
+
+	if offset1 >= offset2 {
+		return nil, errors.New("get range data fail, invalid indices")
+	}
+
+	shape := make([]int, len(indices1))
+	for i, idx := range indices1 {
+		if idx == indices2[i] {
+			shape[i] = idx
+		}
+		if idx < indices2[i] {
+			shape[i] = indices2[i] - idx
+		}
+	}
+
+	blob := New()
+	if err := blob.Reshape(shape); err != nil {
+		return nil, err
+	}
+
+	for i := offset1; i < offset2; i++ {
+		blob.Data[i-offset1] = b.Data[i]
+		blob.Diff[i-offset1] = b.Diff[i]
+	}
+
+	return blob, nil
+}
+
+func (b *Blob) DataSet(index []int, value float64) {
+	b.Data[b.Offset(index)] = value
+}
+
+func (b *Blob) DiffSet(index []int, value float64) {
+	b.Diff[b.Offset(index)] = value
 }
 
 func (b *Blob) DataAt(index []int) float64 {
@@ -311,20 +337,55 @@ func (b *Blob) SumSquareDiff() float64 {
 	return sum
 }
 
-// ScaleData scale the blob data by a constant factor
-func (b *Blob) ScaleData(scale float64) {
+// Scale scale the blob data by a constant factor
+func (b *Blob) ScaleData(scale float64, toDiff bool) {
 	data := make([]float64, len(b.Data))
 	for i, v := range b.Data {
 		data[i] = v * scale
 	}
 	copy(b.Data, data)
+
+	if toDiff {
+		diff := make([]float64, len(b.Diff))
+		for i, v := range b.Diff {
+			diff[i] = v * scale
+		}
+		copy(b.Diff, diff)
+	}
 }
 
-// ScaleDiff scale the blob diff by a constant factor
-func (b *Blob) ScaleDiff(scale float64) {
-	diff := make([]float64, len(b.Diff))
-	for i, v := range b.Diff {
-		diff[i] = v * scale
+func (b *Blob) Add(blob *Blob, toDiff bool) error {
+	if !b.ShapeEquals(blob) {
+		return errors.New("blob add data fail, mismatch shape")
 	}
-	copy(b.Diff, diff)
+
+	for i := 0; i < b.Capacity; i++ {
+		b.Data[i] += blob.Data[i]
+	}
+
+	if toDiff {
+		for i := 0; i < b.Capacity; i++ {
+			b.Diff[i] += blob.Diff[i]
+		}
+	}
+
+	return nil
+}
+
+func (b *Blob) Mul(blob *Blob, toDiff bool) error {
+	if !b.ShapeEquals(blob) {
+		return errors.New("blob add data fail, mismatch shape")
+	}
+
+	for i := 0; i < b.Capacity; i++ {
+		b.Data[i] *= blob.Data[i]
+	}
+
+	if toDiff {
+		for i := 0; i < b.Capacity; i++ {
+			b.Diff[i] *= blob.Diff[i]
+		}
+	}
+
+	return nil
 }
