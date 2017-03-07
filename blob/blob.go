@@ -263,9 +263,11 @@ func (b *Blob) Range(indices1, indices2 []int, tp Type) (*Blob, error) {
 		}
 	}
 
-	result := New(shape)
+	result, err := New(shape)
+	if err != nil {
+		return nil, err
+	}
 
-	data := []float64{}
 	for n := indices1[0]; n < indices2[0]; n++ {
 		for c := indices1[1]; c < indices2[1]; c++ {
 			for h := indices1[2]; h < indices2[2]; h++ {
