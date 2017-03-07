@@ -378,8 +378,8 @@ func (b *Blob) Add(other *Blob, tp Type) error {
 	return nil
 }
 
-// Mul will multiply data or diff by a input blob
-func (b *Blob) Mul(other *Blob, tp Type) error {
+// Dot performs element-wise multiply data or diff by a input blob
+func (b *Blob) Dot(other *Blob, tp Type) error {
 	if !b.ShapeEquals(other) {
 		return errors.New("blob add data fail, mismatch shape")
 	}

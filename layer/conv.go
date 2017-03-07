@@ -11,6 +11,13 @@ import (
 	pb "github.com/cvley/gocaffe/proto"
 )
 
+type convolutionParam struct {
+	pad      []int
+	kernel   []int
+	stride   []int
+	dilation []int
+}
+
 // ConvLayer implement convolution layer struct.
 type ConvLayer struct {
 	Bottom []string
@@ -18,12 +25,10 @@ type ConvLayer struct {
 
 	ConvParam *pb.ConvolutionParameter
 
+	param *convolutionParam
+
 	numOutput int
 	group     int
-	pad       []uint32
-	kernel    []uint32
-	stride    []uint32
-	dilation  []uint32
 	axis      int
 	weight    *blob.Blob
 	bias      *blob.Blob
@@ -38,32 +43,57 @@ func NewConvolutionLayer(param *pb.V1LayerParameter) (*ConvLayer, error) {
 	}
 
 	//TODO: compatibility
+	blobprotos := param.GetBlobs()
+	var weight, bias *blob.Blob
+	var err error
+	weight, err = blob.FromProto(blobprotos[0])
+	if err != nil {
+		return nil, err
+	}
+
+	if convParam.GetBiasTerm() {
+		bias, err = blob.FromProto(blobprotos[1])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	cParam := &convolutionParam{
+		pad:      []int{},
+		kernel:   []int{},
+		stride:   []int{},
+		dilation: []int{},
+	}
+
+	for _, v := range convParam.GetPad() {
+		cParam.pad = append(cParam.pad, int(v))
+	}
+
+	for _, v := range convParam.GetKernelSize() {
+		cParam.kernel = append(cParam.kernel, int(v))
+	}
+
+	for _, v := range convParam.GetStride() {
+		cParam.stride = append(cParam.stride, int(v))
+	}
+
+	for _, v := range convParam.GetDilation() {
+		cParam.dilation = append(cParam.dilation, int(v))
+	}
+
 	convLayer := &ConvLayer{
 		Bottom:    param.GetBottom(),
 		Top:       param.GetTop(),
 		ConvParam: convParam,
 		numOutput: int(convParam.GetNumOutput()),
 		group:     int(convParam.GetGroup()),
-		pad:       convParam.GetPad(),
-		kernel:    convParam.GetKernelSize(),
-		stride:    convParam.GetStride(),
-		dilation:  convParam.GetDilation(),
+		param:     param,
 		axis:      int(convParam.GetAxis()),
-		weight:    blob.New(),
-		bias:      blob.New(),
+		weight:    weight,
+		bias:      bias,
 	}
 
-	blobprotos := param.GetBlobs()
-	if err := convLayer.weight.FromProto(blobprotos[0], true); err != nil {
-		return nil, err
-	}
-	if convParam.GetBiasTerm() {
-		if err := convLayer.bias.FromProto(blobprotos[1], true); err != nil {
-			return nil, err
-		}
-	}
-
-	log.Printf("length of weight: %d", len(convLayer.weight.Data))
+	log.Printf("length of weight: %d", weight.Capacity())
 
 	return convLayer, nil
 }
@@ -93,8 +123,7 @@ func (conv *ConvLayer) Type() string {
 }
 
 func (conv *ConvLayer) forward(bottom *blob.Blob) (*blob.Blob, error) {
-	// TODO: too many params, maybe use conv param is better?
-	dataCols, outW, outH := im2col(bottom, conv.kernel[0], conv.kernel[0], conv.pad[0], conv.pad[0], conv.stride[0], conv.stride[0], conv.dilation[0], conv.dilation[0])
+	dataCols, outW, outH := im2col(bottom, conv.param)
 
 	cols := int(conv.kernel[0]*conv.kernel[0]) * int(bottom.Channels())
 
