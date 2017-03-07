@@ -247,36 +247,37 @@ func (b *Blob) Offset(indices []int) int {
 	return offset
 }
 
-// Range returns a new Blob between two input indices
-func (b *Blob) Range(indices1, indices2 []int) (*Blob, error) {
-	offset1 := b.Offset(indices1)
-	offset2 := b.Offset(indices2)
-
-	if offset1 >= offset2 {
+// Range returns a new Blob between two input indices, currently used for
+// convolution
+func (b *Blob) Range(indices1, indices2 []int, tp Type) (*Blob, error) {
+	if len(b.shape) != len(indices1) || len(b.shape) != len(indices2) ||
+		len(b.shape) != 4 {
 		return nil, errors.New("get range data fail, invalid indices")
 	}
 
-	shape := make([]int, len(indices1))
-	for i, idx := range indices1 {
-		if idx == indices2[i] {
-			shape[i] = idx
-		}
-		if idx < indices2[i] {
-			shape[i] = indices2[i] - idx
+	shape := make([]int, len(b.shape))
+	for i, v := range indices1 {
+		shape[i] = indices2[i] - v
+		if shape[i] == 0 {
+			shape[i] = 1
 		}
 	}
 
-	blob, err := New(shape)
-	if err != nil {
-		return nil, err
+	result := New(shape)
+
+	data := []float64{}
+	for n := indices1[0]; n < indices2[0]; n++ {
+		for c := indices1[1]; c < indices2[1]; c++ {
+			for h := indices1[2]; h < indices2[2]; h++ {
+				for w := indices1[3]; w < indices2[3]; w++ {
+					idx := []int{n, c, h, w}
+					result.Set(idx, b.Get(idx, tp), tp)
+				}
+			}
+		}
 	}
 
-	for i := offset1; i < offset2; i++ {
-		blob.data[i-offset1] = b.data[i]
-		blob.diff[i-offset1] = b.diff[i]
-	}
-
-	return blob, nil
+	return result, nil
 }
 
 // Set will set value in the index with input type
@@ -396,4 +397,25 @@ func (b *Blob) Dot(other *Blob, tp Type) error {
 	}
 
 	return nil
+}
+
+// Mul perform matrix multiply data or diff by a input blob
+func (b *Blob) Mul(other *Blob, tp Type) (float64, error) {
+	if !b.ShapeEquals(other) {
+		return 0, errors.New("blob add data fail, mismatch shape")
+	}
+
+	var sum float64
+	switch tp {
+	case ToData:
+		for i := 0; i < b.capacity; i++ {
+			sum += b.data[i] * other.data[i]
+		}
+	case ToDiff:
+		for i := 0; i < b.capacity; i++ {
+			sum += b.diff[i] * other.diff[i]
+		}
+	}
+
+	return sum, nil
 }
