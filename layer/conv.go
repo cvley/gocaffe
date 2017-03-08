@@ -4,9 +4,6 @@ import (
 	"errors"
 	"log"
 
-	"github.com/gonum/blas"
-	"github.com/gonum/blas/blas64"
-
 	"github.com/cvley/gocaffe/blob"
 	pb "github.com/cvley/gocaffe/proto"
 )
@@ -87,7 +84,7 @@ func NewConvolutionLayer(param *pb.V1LayerParameter) (*ConvLayer, error) {
 		ConvParam: convParam,
 		numOutput: int(convParam.GetNumOutput()),
 		group:     int(convParam.GetGroup()),
-		param:     param,
+		param:     cParam,
 		axis:      int(convParam.GetAxis()),
 		weight:    weight,
 		bias:      bias,
@@ -123,91 +120,74 @@ func (conv *ConvLayer) Type() string {
 }
 
 func (conv *ConvLayer) forward(bottom *blob.Blob) (*blob.Blob, error) {
-	dataCols, outW, outH := im2col(bottom, conv.param)
-
-	cols := int(conv.kernel[0]*conv.kernel[0]) * int(bottom.Channels())
-
 	// convolution
-	w := blas64.General{
-		Cols:   cols,
-		Rows:   conv.numOutput,
-		Stride: cols,
-		Data:   conv.weight.Data,
+	convBlob, err := conv.conv(bottom)
+	if err != nil {
+		return nil, err
 	}
-	c := blas64.General{
-		Cols:   conv.numOutput,
-		Rows:   cols,
-		Stride: conv.numOutput,
-		Data:   make([]float64, conv.numOutput*cols),
-	}
-	blas64.Gemm(blas.NoTrans, blas.NoTrans, 1.0, dataCols, w, 0.0, c)
 
 	// bias
-	b := blas64.General{
-		Cols:   1,
-		Rows:   conv.numOutput,
-		Stride: 1,
-		Data:   conv.bias.Data,
-	}
-	ones := make([]float64, int(outH*outW))
-	for i, _ := range ones {
-		ones[i] = 1.0
-	}
-	bMultiplier := blas64.General{
-		Cols:   int(outH * outW),
-		Rows:   1,
-		Stride: int(outH * outW),
-		Data:   ones,
-	}
-	blas64.Gemm(blas.NoTrans, blas.NoTrans, 1.0, bMultiplier, b, 0.0, c)
+	convBlob.Add(conv.bias, blob.ToData)
 
-	return &blob.Blob{
-		Data:     c.Data,
-		Shape:    []int{bottom.Num(), conv.numOutput, outW, outH},
-		Count:    dataCols.Rows * dataCols.Cols,
-		Capacity: dataCols.Rows * dataCols.Cols,
-	}, nil
+	return convBlob, nil
 }
 
-func im2col(data *blob.Blob, kernelH, kernelW, padH, padW, strideH, strideW, dilationH, dilationW uint32) (blas64.General, int, int) {
+func (conv *ConvLayer) conv(data *blob.Blob) (*blob.Blob, error) {
+	num := data.Num()
 	channels := data.Channels()
 	width := data.Width()
 	height := data.Height()
 
-	outH := (height + int(padH)*2 - int(dilationH*(kernelH-1))/int(strideH)) + 1
-	outW := (width + int(padW)*2 - int(dilationW*(kernelW-1))/int(strideW)) + 1
-	outData := blas64.General{
-		Cols:   int(outH * outW),
-		Rows:   channels * int(kernelH*kernelW),
-		Stride: channels * int(kernelH*kernelW),
-		Data:   make([]float64, outH*outW*channels*int(kernelH*kernelW)),
+	outH := conv.param.getOutputH(height)
+	outW := conv.param.getOutputW(width)
+
+	shape := []int{data.Num(), conv.numOutput, outH, outW}
+	result, err := blob.New(shape)
+	if err != nil {
+		return nil, err
 	}
 
-	idx := 0
-	for channel := 0; channel < channels; channel++ {
-		for kRow := 0; kRow < int(kernelH); kRow++ {
-			for kCol := 0; kCol < int(kernelW); kCol++ {
-				inRow := -int(padH) + kRow*int(dilationH)
-				for outRow := 0; outRow < outH; outRow++ {
-					if inRow >= 0 && inRow < height {
-						inCol := -int(padW) + kCol*int(dilationW)
-						for outCol := 0; outCol < outW; outCol++ {
-							if inCol >= 0 && inCol < width {
-								outData.Data[idx] = data.Data[inRow*width+inCol+channel*width*height]
+	// TODO: simple and naive
+	for n := 0; n < data.Num(); n++ {
+		for o := 0; o < conv.numOutput; o++ {
+			for c := 0; c < data.Channels(); c++ {
+				for h := 0; h < outH; h++ {
+					for w := 0; w < outW; w++ {
+						sH, eH := conv.param.rangeH(h)
+						sW, eW := conv.param.rangeW(w)
+						var sum float64
+						for y := sH; y < eH; y++ {
+							for x := sW; x < eW; x++ {
+								if y < 0 || x < 0 {
+									continue
+								}
+								sum += data.Get([]int{n, c, y, x}, blob.ToData) * conv.weight.Get([]int{n, o, y, x}, blob.ToData)
 							}
-							inCol += int(strideW)
-							idx++
 						}
-					} else {
-						for outCol := 0; outCol < int(outW); outCol++ {
-							idx++
-						}
+						result.Set([]int{n, o, h, w}, sum, blob.ToData)
 					}
-					inRow += int(strideH)
 				}
 			}
 		}
 	}
 
-	return outData, outW, outH
+	return result, nil
+}
+
+func (c *convolutionParam) getOutputH(h int) int {
+	return (h+c.pad[0]*2-(c.dilation[0]*(c.kernel[0]-1)+1))/c.stride[0] + 1
+}
+
+func (c *convolutionParam) getOutputW(w int) int {
+	return (w+c.pad[1]*2-(c.dilation[1]*(c.kernel[1]-1)+1))/c.stride[1] + 1
+}
+
+func (c *convolutionParam) rangeH(h int) (int, int) {
+	r := (c.dilation[0]*(c.kernel[0]-1) + 1) / 2
+	return h - r, h + r
+}
+
+func (c *convolutionParam) rangeW(w int) (int, int) {
+	r := (c.dilation[1]*(c.kernel[1]-1) + 1) / 2
+	return w - r, w + r
 }
