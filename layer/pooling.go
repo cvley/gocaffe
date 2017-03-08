@@ -105,9 +105,11 @@ func (pool *PoolingLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 		}
 	}
 
-	top := blob.New()
 	shape := []int{bottom[0].Num(), channels, pooledHeight, pooledWidth}
-	top.Reshape(shape)
+	top, err := blob.New(shape)
+	if err != nil {
+		return nil, err
+	}
 
 	switch pool.poolType {
 	case pb.PoolingParameter_MAX:
@@ -132,13 +134,13 @@ func (pool *PoolingLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 							wStart = 0
 						}
 						poolIndices := []int{n, c, ph, pw}
-						poolIdx := top.Offset(poolIndices)
 						for h := hStart; h < hEnd; h++ {
 							for w := wStart; w < wEnd; w++ {
 								indices := []int{n, c, h, w}
-								idx := bottom[0].Offset(indices)
-								if bottom[0].Data[idx] > top.Data[poolIdx] {
-									top.Data[poolIdx] = bottom[0].Data[idx]
+								bData := bottom[0].Get(indices, blob.ToData)
+								tData := top.Get(poolIndices, blob.ToData)
+								if bData > tData {
+									top.Set(poolIndices, bData, blob.ToData)
 								}
 							}
 						}
@@ -170,15 +172,14 @@ func (pool *PoolingLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 						}
 						poolSize := (hEnd - hStart) * (wEnd - wStart)
 						poolIndices := []int{n, c, ph, pw}
-						poolIdx := top.Offset(poolIndices)
 						for h := hStart; h < hEnd; h++ {
 							for w := wStart; w < wEnd; w++ {
 								indices := []int{n, c, h, w}
-								idx := bottom[0].Offset(indices)
-								top.Data[poolIdx] += bottom[0].Data[idx]
+								top.Set(poolIndices, bottom[0].Get(indices, blob.ToData), blob.ToData)
 							}
 						}
-						top.Data[poolIdx] /= float64(poolSize)
+						tData := top.Get(poolIndices, blob.ToData)
+						top.Set(poolIndices, tData/float64(poolSize), blob.ToData)
 					}
 				}
 			}
