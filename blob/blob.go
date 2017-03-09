@@ -177,6 +177,11 @@ func (b *Blob) String() string {
 	return buffers.String()
 }
 
+// Shape returns the shape of the blob
+func (b *Blob) Shape() []int {
+	return b.shape
+}
+
 // ShapeOfIndex returns the shape in the input index
 func (b *Blob) ShapeOfIndex(index int) int {
 	return b.shape[index]
