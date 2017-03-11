@@ -2,7 +2,6 @@ package layer
 
 import (
 	"errors"
-	"math"
 	"log"
 
 	"github.com/cvley/gocaffe/blob"
@@ -68,39 +67,109 @@ func (lrn *LrnLayer) Type() string {
 }
 
 func (lrn *LrnLayer) crossChannelForward(bottom []*blob.Blob) ([]*blob.Blob, error) {
-	scaleData := blob.New()
-	scaleData.ReshapeLike(bottom[0])
-	// start with the constant value
-	for i := 0; i < scaleData.Count; i++ {
-		scaleData.Data[i] = lrn.k
+	scaleData, err := blob.Init(bottom[0].Shape(), lrn.k, blob.ToData)
+	if err != nil {
+		return nil, err
 	}
 
-	paddedSquare := blob.New()
-	paddedSquare.Reshape([]int{
+	paddedSquare, err := blob.New([]int{
 		bottom[0].Num(),
 		bottom[0].Channels() + lrn.size - 1,
 		bottom[0].Height(),
 		bottom[0].Width(),
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	channels := bottom[0].Channels()
+	width := bottom[0].Width()
+	height := bottom[0].Height()
 
 	alphaOverSize := lrn.alpha / float64(lrn.size)
+
 	// go through the images
 	for n := 0; n < bottom[0].Num(); n++ {
 		// compute the padded square
-		sqrData := make([]float64, bottom[0].Capacity)
-		for c := 0; c < bottom[0].Channels(); c++ {
-			for h := 0; h < bottom[0].Height(); h++ {
-				for w := 0; w < bottom[0].Width(); w++ {
-					sqrData[bottom[0].Width()*bottom[0].Height()*c+bottom[0].Width()+w] = math.Pow(bottom[0].DataAt([]int{n, c, h, w}), 2)
-				}
+		imBlob, err := bottom[0].Range(
+			[]int{n, channels, height, width},
+			[]int{n + 1, channels, height, width},
+			blob.ToData,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		sqrBlob, err := imBlob.Dot(imBlob, blob.ToData)
+		if err != nil {
+			return nil, err
+		}
+		paddedSquare.SetNumChannel(0, n+lrn.prePad, sqrBlob, blob.ToData)
+
+		// create the first channel scale
+		for c := 0; c < lrn.size; c++ {
+			cBlob, err := paddedSquare.Range(
+				[]int{n, c, height, width},
+				[]int{n, c + 1, height, width},
+				blob.ToData,
+			)
+			if err != nil {
+				return nil, err
+			}
+			cBlob.Scale(alphaOverSize, blob.ToData)
+			if err := scaleData.SetNumChannel(n, 0, cBlob, blob.ToData); err != nil {
+				return nil, err
+			}
+		}
+
+		for c := 1; c < channels; c++ {
+			// copy previous scale
+			cBlob, err := scaleData.Range(
+				[]int{n, c - 1, height, width},
+				[]int{n, c, height, width},
+				blob.ToData,
+			)
+			if err := scaleData.SetNumChannel(n, c, cBlob, blob.ToData); err != nil {
+				return nil, err
+			}
+			// add head
+			hBlob, err := paddedSquare.Range(
+				[]int{0, c + lrn.size - 1, height, width},
+				[]int{0, c + lrn.size, height, width},
+				blob.ToData,
+			)
+			if err != nil {
+				return nil, err
+			}
+			hBlob.Scale(alphaOverSize, blob.ToData)
+			if err := cBlob.Add(hBlob, blob.ToData); err != nil {
+				return nil, err
+			}
+			// subtract tail
+			tBlob, err := paddedSquare.Range(
+				[]int{0, c - 1, height, width},
+				[]int{0, c, height, width},
+				blob.ToData,
+			)
+			tBlob.Scale(-alphaOverSize, blob.ToData)
+			if err := cBlob.Add(tBlob, blob.ToData); err != nil {
+				return nil, err
 			}
 
+			if err := scaleData.SetNumChannel(n, c, cBlob, blob.ToData); err != nil {
+				return nil, err
+			}
 		}
-		paddedSquare.Data = sqrData
-		// create the first channel scale
 	}
 
-	return nil, nil
+	// compute output
+	scaleData.Powx(-lrn.beta, blob.ToData)
+	top, err := bottom[0].Dot(scaleData, blob.ToData)
+	if err != nil {
+		return nil, err
+	}
+
+	return []*blob.Blob{top}, nil
 }
 
 func (lrn *LrnLayer) withinChannelForward(bottom []*blob.Blob) ([]*blob.Blob, error) {
