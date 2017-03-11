@@ -148,9 +148,9 @@ func (conv *ConvLayer) conv(data *blob.Blob) (*blob.Blob, error) {
 	}
 
 	// TODO: simple and naive
-	for n := 0; n < data.Num(); n++ {
+	for n := 0; n < num; n++ {
 		for o := 0; o < conv.numOutput; o++ {
-			for c := 0; c < data.Channels(); c++ {
+			for c := 0; c < channels; c++ {
 				for h := 0; h < outH; h++ {
 					for w := 0; w < outW; w++ {
 						sH, eH := conv.param.rangeH(h)
