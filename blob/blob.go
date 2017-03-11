@@ -287,7 +287,7 @@ func (b *Blob) Range(indices1, indices2 []int, tp Type) (*Blob, error) {
 	return result, nil
 }
 
-func (b *Blob) SetChannel(index int, other *Blob, tp Type) error {
+func (b *Blob) SetNumChannel(index0, index1 int, other *Blob, tp Type) error {
 	if b.Width() != other.Width() || b.Height() != other.Height() {
 		return errors.New("set channel fail, mismatch shape")
 	}
@@ -296,12 +296,10 @@ func (b *Blob) SetChannel(index int, other *Blob, tp Type) error {
 		return errors.New("set channel fail, invalid blob")
 	}
 
-	for n := 0; n < b.Num(); n++ {
-		for h := 0; h < b.Height(); h++ {
-			for w := 0; w < b.Width(); w++ {
-				idx := []int{n, index, h, w}
-				b.Set(idx, other.Get([]int{1, 1, h, w}, tp), tp)
-			}
+	for h := 0; h < b.Height(); h++ {
+		for w := 0; w < b.Width(); w++ {
+			idx := []int{index0, index1, h, w}
+			b.Set(idx, other.Get([]int{0, 0, h, w}, tp), tp)
 		}
 	}
 
@@ -451,4 +449,19 @@ func (b *Blob) Mul(other *Blob, tp Type) (float64, error) {
 	}
 
 	return sum, nil
+}
+
+// Powx perform element-wise powx of the blob
+func (b *Blob) Powx(x float64, tp Type) {
+	switch tp {
+	case ToData:
+		for i := 0; i < b.capacity; i++ {
+			b.data[i] = math.Pow(b.data[i], x)
+		}
+
+	case ToDiff:
+		for i := 0; i < b.capacity; i++ {
+			b.diff[i] = math.Pow(b.diff[i], x)
+		}
+	}
 }
