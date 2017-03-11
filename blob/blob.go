@@ -287,6 +287,27 @@ func (b *Blob) Range(indices1, indices2 []int, tp Type) (*Blob, error) {
 	return result, nil
 }
 
+func (b *Blob) SetChannel(index int, other *Blob, tp Type) error {
+	if b.Width() != other.Width() || b.Height() != other.Height() {
+		return errors.New("set channel fail, mismatch shape")
+	}
+
+	if other.Num() != 1 || other.Channels() != 1 {
+		return errors.New("set channel fail, invalid blob")
+	}
+
+	for n := 0; n < b.Num(); n++ {
+		for h := 0; h < b.Height(); h++ {
+			for w := 0; w < b.Width(); w++ {
+				idx := []int{n, index, h, w}
+				b.Set(idx, other.Get([]int{1, 1, h, w}, tp), tp)
+			}
+		}
+	}
+
+	return nil
+}
+
 // Set will set value in the index with input type
 func (b *Blob) Set(index []int, value float64, tp Type) {
 	switch tp {
@@ -387,23 +408,28 @@ func (b *Blob) Add(other *Blob, tp Type) error {
 }
 
 // Dot performs element-wise multiply data or diff by a input blob
-func (b *Blob) Dot(other *Blob, tp Type) error {
+func (b *Blob) Dot(other *Blob, tp Type) (*Blob, error) {
 	if !b.ShapeEquals(other) {
-		return errors.New("blob add data fail, mismatch shape")
+		return nil, errors.New("blob add data fail, mismatch shape")
+	}
+
+	result, err := New(b.shape)
+	if err != nil {
+		return nil, err
 	}
 
 	switch tp {
 	case ToData:
 		for i := 0; i < b.capacity; i++ {
-			b.data[i] *= other.data[i]
+			result.data[i] = b.data[i] * other.data[i]
 		}
 	case ToDiff:
 		for i := 0; i < b.capacity; i++ {
-			b.diff[i] *= other.diff[i]
+			result.diff[i] = b.data[i] * other.diff[i]
 		}
 	}
 
-	return nil
+	return result, nil
 }
 
 // Mul perform matrix multiply data or diff by a input blob
