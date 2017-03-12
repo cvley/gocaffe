@@ -166,6 +166,14 @@ func (b *Blob) ShapeEquals(other *Blob) bool {
 	return true
 }
 
+// Copy returns a new blob with the same shape and data
+func (b *Blob) Copy() *Blob {
+	result, _ := New(b.shape)
+	copy(result.data, b.data)
+	copy(result.diff, b.diff)
+	return result
+}
+
 // Strings returns blob shape and capacity in string format
 func (b *Blob) String() string {
 	var buffers bytes.Buffer
