@@ -19,6 +19,14 @@ type Layer interface {
 	Type() string
 }
 
+// NeuronLayer is the interface for layers that take one blob as input and
+// produce one equally-sized blob as output, where each element of the output
+// depends only on the corresponding input element
+type NeuronLayer interface {
+	Forward(bottom []*blob.Blob) ([]*blob.Blob, error)
+	Type() string
+}
+
 type Creator func(*pb.V1LayerParameter) (Layer, error)
 
 type LayerRegistry map[string]Creator
