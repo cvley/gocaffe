@@ -1,8 +1,6 @@
 package layer
 
 import (
-	"log"
-
 	"github.com/cvley/gocaffe/blob"
 	//pb "github.com/cvley/gocaffe/proto"
 )

@@ -2,7 +2,6 @@ package layer
 
 import (
 	"errors"
-	"log"
 	"math"
 
 	"github.com/cvley/gocaffe/blob"
@@ -12,10 +11,10 @@ import (
 // PowerLayer computes y = (\alpha x + \beta) ^ \gamma as specified by the
 // scale \alpha, shift \beta, and power \gamma
 type PowerLayer struct {
-	float64 power
-	float64 scale
-	float64 shift
-	float64 diffScale
+	power     float64
+	scale     float64
+	shift     float64
+	diffScale float64
 }
 
 func NewPowerLayer(param *pb.V1LayerParameter) (*PowerLayer, error) {
