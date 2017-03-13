@@ -378,6 +378,21 @@ func (b *Blob) L2Norm(tp Type) float64 {
 	return sum
 }
 
+// Shift will shift the blob data or diff by the input value
+func (b *Blob) Shift(shift float64, tp Type) {
+	switch tp {
+	case ToData:
+		for i, v := range b.data {
+			b.data[i] = v + shift
+		}
+
+	case ToDiff:
+		for i, v := range b.diff {
+			b.diff[i] = v + shift
+		}
+	}
+}
+
 // Scale scale the blob data or diff by a constant factor
 func (b *Blob) Scale(scale float64, tp Type) {
 	switch tp {
