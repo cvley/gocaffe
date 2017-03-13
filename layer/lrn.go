@@ -173,5 +173,73 @@ func (lrn *LrnLayer) crossChannelForward(bottom []*blob.Blob) ([]*blob.Blob, err
 }
 
 func (lrn *LrnLayer) withinChannelForward(bottom []*blob.Blob) ([]*blob.Blob, error) {
-	return nil, nil
+	// set up split layer of two output: one for product input, another for
+	// square input
+	splitLayer := NewSplitLayer(2)
+	splitBlobs, _ := splitLayer.Forward(bottom)
+
+	// set up square layer to square the input
+	power := float32(2.0)
+	squareParam := &pb.PowerParameter{Power: &power}
+	powerLayer, err := NewPowerLayer(&pb.V1LayerParameter{PowerParam: squareParam})
+	if err != nil {
+		return nil, err
+	}
+	squareOutput, err := powerLayer.Forward([]*blob.Blob{splitBlobs[0]})
+	if err != nil {
+		return nil, err
+	}
+
+	// set up pool layer to sum over square neighborhoods of the input
+	pool := pb.PoolingParameter_AVE
+	prePad := uint32(lrn.prePad)
+	kernelSize := uint32(lrn.size)
+	poolParam := &pb.PoolingParameter{
+		Pool:       &pool,
+		Pad:        &prePad,
+		KernelSize: &kernelSize,
+	}
+	poolLayer, err := NewPoolingLayer(&pb.V1LayerParameter{PoolingParam: poolParam})
+	if err != nil {
+		return nil, err
+	}
+	poolOutput, err := poolLayer.Forward(squareOutput)
+	if err != nil {
+		return nil, err
+	}
+
+	// set up power layer to compute (1 + alpha / N^2 s) ^ -beta, where s is
+	// the sum of a squared neighborhood (the output of pool layer)
+	beta := float32(-lrn.beta)
+	alpha := float32(lrn.alpha)
+	shift := float32(1)
+	powerParam := &pb.PowerParameter{
+		Power: &beta,
+		Scale: &alpha,
+		Shift: &shift,
+	}
+
+	powerLayer, err = NewPowerLayer(&pb.V1LayerParameter{PowerParam: powerParam})
+	if err != nil {
+		return nil, err
+	}
+	powerOutput, err := powerLayer.Forward(poolOutput)
+	if err != nil {
+		return nil, err
+	}
+
+	// set up a product layer to compute outputs by multiplying inputs by the
+	// inverse demoninator computed by the power layer
+	op := pb.EltwiseParameter_PROD
+	productParam := &pb.EltwiseParameter{
+		Operation: &op,
+	}
+	productLayer, err := NewEltwiseLayer(&pb.V1LayerParameter{EltwiseParam: productParam})
+	if err != nil {
+		return nil, err
+	}
+
+	productInput := []*blob.Blob{splitBlobs[1]}
+	productInput = append(productInput, powerOutput...)
+	return productLayer.Forward(productInput)
 }
