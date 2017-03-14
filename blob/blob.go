@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/golang/protobuf/proto"
-
 	pb "github.com/cvley/gocaffe/proto"
+	"github.com/golang/protobuf/proto"
 )
 
 const maxBlobAxes = 32
@@ -69,12 +68,12 @@ func Init(shape []int, v float64, tp Type) (*Blob, error) {
 
 	switch tp {
 	case ToData:
-		for i, v := range b.data {
+		for i := 0; i < b.capacity; i++ {
 			b.data[i] = v
 		}
 
 	case ToDiff:
-		for i, v := range b.diff {
+		for i := 0; i < b.capacity; i++ {
 			b.diff[i] = v
 		}
 
@@ -247,7 +246,7 @@ func (b *Blob) Offset(indices []int) int {
 		panic("offset: indices larger than blob axes number")
 	}
 
-	offset := 1
+	var offset int
 	for i := 0; i < b.AxesNum(); i++ {
 		offset *= b.shape[i]
 		if len(indices) > i {
@@ -487,4 +486,70 @@ func (b *Blob) Powx(x float64, tp Type) {
 			b.diff[i] = math.Pow(b.diff[i], x)
 		}
 	}
+}
+
+// MMul performs matrix multiply
+func (b *Blob) MMul(x *Blob, tp Type) (*Blob, error) {
+	if b.Width() != x.Height() {
+		return nil, errors.New("blob matrix multiply fail, invalid shape")
+	}
+
+	shape := []int{b.Num() * x.Num(), b.Channels() * x.Channels(), b.Height(), x.Width()}
+	result, err := New(shape)
+	if err != nil {
+		return nil, err
+	}
+
+	for n1 := 0; n1 < b.Num(); n1++ {
+		for n2 := 0; n2 < x.Num(); n2++ {
+			for c1 := 0; c1 < b.Channels(); c1++ {
+				for c2 := 0; c2 < x.Channels(); c2++ {
+					for h := 0; h < b.Height(); h++ {
+						for w := 0; w < x.Width(); w++ {
+							row, _ := b.GetRow([]int{n1, c1}, h, tp)
+							col, _ := x.GetCol([]int{n2, c2}, w, tp)
+							v, err := row.Mul(col, tp)
+							if err != nil {
+								return nil, err
+							}
+							idx := []int{n1*b.Num() + n2, c1*b.Channels() + c2, h, w}
+							result.Set(idx, v, tp)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// GetCol returns a blob of shape 1x1x1xheight, used for MMul
+func (b *Blob) GetCol(index []int, x int, tp Type) (*Blob, error) {
+	shape := []int{1, 1, 1, b.Height()}
+	result, err := New(shape)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < b.Height(); i++ {
+		idx := []int{index[0], index[1], i, x}
+		result.Set([]int{1, 1, 1, i}, b.Get(idx, tp), tp)
+	}
+	return result, nil
+}
+
+// GetRow returns a blob of shape 1x1x1xwidth, used for MMul
+func (b *Blob) GetRow(index []int, x int, tp Type) (*Blob, error) {
+	shape := []int{1, 1, 1, b.Width()}
+	result, err := New(shape)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < b.Width(); i++ {
+		idx := []int{index[0], index[1], x, i}
+		result.Set([]int{1, 1, 1, i}, b.Get(idx, tp), tp)
+	}
+	return result, nil
 }

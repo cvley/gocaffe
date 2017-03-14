@@ -70,3 +70,21 @@ func TestNewBlob(t *testing.T) {
 		t.Fatal("SumSquareData func fail")
 	}
 }
+
+func TestMMul(t *testing.T) {
+	x, err := Init([]int{1, 1, 5, 2}, 0.1, ToData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	y, err := Init([]int{1, 1, 2, 3}, 0.2, ToData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	z, err := x.MMul(y, ToData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(z.shape)
+	t.Log(z.data)
+}
