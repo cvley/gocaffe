@@ -25,7 +25,7 @@ func (*TanHLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 				for w := 0; w < bottom[0].Width(); w++ {
 					idx := []int{n, c, h, w}
 					v := bottom[0].Get(idx, blob.ToData)
-					top.Set(idx, math.TanH(v), blob.ToData)
+					top.Set(idx, tanH(v), blob.ToData)
 				}
 			}
 		}
@@ -36,4 +36,8 @@ func (*TanHLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 
 func (*TanHLayer) Type() string {
 	return "TanH"
+}
+
+func tanH(x float64) float64 {
+	return (1 - math.Exp(-2*x)) / (1 + math.Exp(-2*x))
 }
