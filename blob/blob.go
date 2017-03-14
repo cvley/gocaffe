@@ -553,3 +553,18 @@ func (b *Blob) GetRow(index []int, x int, tp Type) (*Blob, error) {
 	}
 	return result, nil
 }
+
+// Reshape returns a blob of new shape
+func (b *Blob) Reshape(index []int) (*Blob, error) {
+	count := 1
+	for _, v := range index {
+		count *= v
+	}
+	if count != b.capacity {
+		return nil, errors.New("Reshape fail, invalid index")
+	}
+
+	result := b.Copy()
+	result.shape = index
+	return result, nil
+}
