@@ -6,8 +6,9 @@ import (
 	"os"
 
 	"github.com/cvley/gocaffe/layer"
-	pb "github.com/cvley/gocaffe/proto"
 	"github.com/golang/protobuf/proto"
+
+	pb "github.com/cvley/gocaffe/proto"
 )
 
 type Net struct {
@@ -42,6 +43,7 @@ func (net *Net) CopyTrainedLayersFromFile(file string) (*Net, error) {
 	net.name = param.GetName()
 	log.Printf("construct %s", param.GetName())
 
+	// TODO use layer registry
 	for _, layerParam := range param.GetLayers() {
 		log.Printf("get layer %s, type %s", layerParam.GetName(), layerParam.GetType())
 		switch layerParam.GetType() {
@@ -60,16 +62,47 @@ func (net *Net) CopyTrainedLayersFromFile(file string) (*Net, error) {
 			log.Printf("%+v", l)
 
 		case pb.V1LayerParameter_LRN:
+			l, err := layer.NewLRNLayer(layerParam)
+			if err != nil {
+				log.Println(err)
+			}
+			log.Printf("%+v", l)
 
 		case pb.V1LayerParameter_RELU:
+			l, err := layer.NewReLULayer(layerParam)
+			if err != nil {
+				log.Println(err)
+			}
+			log.Printf("%+v", l)
 
 		case pb.V1LayerParameter_SIGMOID:
+			l, err := layer.NewSigmoidLayer(layerParam)
+			if err != nil {
+				log.Println(err)
+			}
+			log.Printf("%+v", l)
 
 		case pb.V1LayerParameter_INNER_PRODUCT:
+			l, err := layer.NewInnerProductLayer(layerParam)
+			if err != nil {
+				log.Println(err)
+			}
+			log.Printf("%+v", l)
 
 		case pb.V1LayerParameter_DROPOUT:
+			l, err := layer.NewDropoutLayer(layerParam)
+			if err != nil {
+				log.Println(err)
+			}
+			log.Printf("%+v", l)
 
 		case pb.V1LayerParameter_SOFTMAX_LOSS:
+			l, err := layer.NewSoftmaxLayer(layerParam)
+			log.Println(layerParam)
+			if err != nil {
+				log.Println(err)
+			}
+			log.Printf("%+v", l)
 		}
 	}
 
