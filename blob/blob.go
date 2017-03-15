@@ -488,6 +488,21 @@ func (b *Blob) Powx(x float64, tp Type) {
 	}
 }
 
+// Exp perform element-wise Exp function
+func (b *Blob) Exp(tp Type) {
+	switch tp {
+	case ToData:
+		for i := 0; i < b.capacity; i++ {
+			b.data[i] = math.Exp(b.data[i])
+		}
+
+	case ToDiff:
+		for i := 0; i < b.capacity; i++ {
+			b.diff[i] = math.Exp(b.diff[i])
+		}
+	}
+}
+
 // MMul performs matrix multiply
 func (b *Blob) MMul(x *Blob, tp Type) (*Blob, error) {
 	if b.Width() != x.Height() {
