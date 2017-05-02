@@ -1,17 +1,16 @@
 package io
 
 import (
-	"bytes"
 	"testing"
 
 	pb "github.com/cvley/gocaffe/proto"
 )
 
 func TestParse(t *testing.T) {
-	data := []byte(`name: "CaffeNet"`)
+	data := []byte(`name: "CaffeNet"\r\ninput_dim: 10\r\ninput_dim: 1\r\ninput_dim: 3`)
 
 	msg := &pb.NetParameter{}
-	if err := Parse(bytes.NewReader(data), msg); err != nil {
+	if err := Parse(data, msg); err != nil {
 		t.Fatal(err)
 	}
 }
