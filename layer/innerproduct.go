@@ -29,23 +29,22 @@ func NewInnerProductLayer(param *pb.V1LayerParameter) (*InnerProductLayer, error
 	axis := innerParam.GetAxis()
 
 	// TODO check if we need to initialize the weight and bias
-	blobprotos := param.GetBlobs()
 	var weight, bias *blob.Blob
-	var err error
-	weight, err = blob.FromProto(blobprotos[0])
-	if err != nil {
-		return nil, err
-	}
-	if biasTerm {
-		bias, err = blob.FromProto(blobprotos[1])
+	blobprotos := param.GetBlobs()
+	if blobprotos != nil {
+		var err error
+		weight, err = blob.FromProto(blobprotos[0])
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	log.Println("inner product", weight.Shape())
-	if biasTerm {
-		log.Println("inner product", bias.Shape())
+		if biasTerm {
+			bias, err = blob.FromProto(blobprotos[1])
+			if err != nil {
+				return nil, err
+			}
+			log.Println("inner product", bias.Shape())
+		}
+		log.Println("inner product", weight.Shape())
 	}
 
 	return &InnerProductLayer{

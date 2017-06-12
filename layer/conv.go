@@ -42,17 +42,20 @@ func NewConvolutionLayer(param *pb.V1LayerParameter) (*ConvLayer, error) {
 	//TODO: compatibility
 	blobprotos := param.GetBlobs()
 	var weight, bias *blob.Blob
-	var err error
-	weight, err = blob.FromProto(blobprotos[0])
-	if err != nil {
-		return nil, err
-	}
-
-	if convParam.GetBiasTerm() {
-		bias, err = blob.FromProto(blobprotos[1])
+	if blobprotos != nil {
+		var err error
+		weight, err = blob.FromProto(blobprotos[0])
 		if err != nil {
 			return nil, err
 		}
+		if convParam.GetBiasTerm() {
+			bias, err = blob.FromProto(blobprotos[1])
+			if err != nil {
+				return nil, err
+			}
+		}
+		log.Printf("length of weight: %d", weight.Capacity())
+
 	}
 
 	cParam := &convolutionParam{
@@ -89,8 +92,6 @@ func NewConvolutionLayer(param *pb.V1LayerParameter) (*ConvLayer, error) {
 		weight:    weight,
 		bias:      bias,
 	}
-
-	log.Printf("length of weight: %d", weight.Capacity())
 
 	return convLayer, nil
 }
