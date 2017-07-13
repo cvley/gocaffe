@@ -27,3 +27,5 @@ _testmain.go
 proto/*.go
 imagenet_deploy.prototxt
 imagenet_model
+*.jpg
+io/*.jpg
