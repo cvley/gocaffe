@@ -63,6 +63,8 @@ func NewInnerProductLayer(param *pb.V1LayerParameter) (*InnerProductLayer, error
 
 func (inner *InnerProductLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 	shape := bottom[0].Shape()
+	log.Println("inner bottom shape", shape)
+
 	reshape := make([]int64, len(shape))
 
 	M := int64(1)
@@ -82,7 +84,7 @@ func (inner *InnerProductLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, erro
 
 	log.Println("inner weight and bias shape", inner.weight.Shape(), inner.bias.Shape())
 
-	reBlob, err := bottom[0].Reshape([]int64{1, 1, K, M})
+	reBlob, err := bottom[0].Reshape([]int64{1, 1, M, K})
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +92,7 @@ func (inner *InnerProductLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, erro
 	log.Println("reshape bottom shape", reBlob.Shape())
 
 	// top shape [1, 1, M, inner.n]
-	top, err := inner.weight.MMul(reBlob)
+	top, err := reBlob.MMul(inner.weight.Trans())
 	if err != nil {
 		return nil, err
 	}

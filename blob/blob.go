@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"sort"
 
 	pb "github.com/cvley/gocaffe/proto"
 	"github.com/golang/protobuf/proto"
@@ -370,6 +371,30 @@ func (b *Blob) Exp() {
 	}
 }
 
+// Trans perform transpose of matrix
+func (b *Blob) Trans() *Blob {
+	nShape := b.shape
+	nShape[2], nShape[3] = b.shape[3], b.shape[2]
+	nb, err := New(nShape)
+	if err != nil {
+		panic(err)
+	}
+
+	for n := 0; n < int(nb.Num()); n++ {
+		for c := 0; c < int(nb.Channels()); c++ {
+			for h := 0; h < int(nb.Height()); h++ {
+				for w := 0; w < int(nb.Width()); w++ {
+					oIdx := []int{n, c, w, h}
+					nIdx := []int{n, c, h, w}
+					nb.Set(nIdx, b.Get(oIdx))
+				}
+			}
+		}
+	}
+
+	return nb
+}
+
 // MMul performs matrix multiply
 func (b *Blob) MMul(x *Blob) (*Blob, error) {
 	if b.Width() != x.Height() {
@@ -461,3 +486,28 @@ func (b *Blob) DataString() string {
 	}
 	return buffer.String()
 }
+
+// GetTop returns tops number indexes and probs
+func (b *Blob) GetTop(num int) []Value {
+	vals := []Value{}
+	for i := 0; i < int(b.Width()); i++ {
+		probs := b.Get([]int{1, 1, 1, i})
+		v := Value{Index: i, Probs: probs}
+		vals = append(vals, v)
+	}
+
+	sort.Sort(SortValue(vals))
+
+	return vals[:num]
+}
+
+type Value struct {
+	Index int
+	Probs float64
+}
+
+type SortValue []Value
+
+func (v SortValue) Len() int           { return len(v) }
+func (v SortValue) Swap(i, j int)      { v[i], v[j] = v[j], v[i] }
+func (v SortValue) Less(i, j int) bool { return v[i].Probs > v[j].Probs }

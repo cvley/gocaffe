@@ -67,7 +67,5 @@ func main() {
 		os.Exit(1)
 	}
 
-//	for i:=0; i< 1000; i++ {
-		log.Printf("%f ", tops[0].Get([]int{0, 0, 0, 0}))
-//	}
+	log.Println(tops[0].GetTop(5))
 }

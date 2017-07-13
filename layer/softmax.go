@@ -44,7 +44,6 @@ func (soft *SoftmaxLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 	if soft.axis < 0 {
 		axis += len(shape)
 	}
-	shape[axis] = 1
 
 	idx := make([]int, 4)
 	for i := 0; i < len(shape); i++ {
@@ -62,11 +61,9 @@ func (soft *SoftmaxLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 		for v := 0; v < int(shape[i]); v++ {
 			idx[i] = v
 			val := top.Get(idx)
-			log.Println(idx, val, math.Exp(val))
 			sum += math.Exp(val)
 		}
 	}
-	log.Println("sum", sum)
 
 	top.Exp()
 	top.Scale(1 / sum)
