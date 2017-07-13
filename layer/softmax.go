@@ -1,8 +1,8 @@
 package layer
 
 import (
-	"log"
 	"errors"
+	"log"
 	"math"
 
 	"github.com/cvley/gocaffe/blob"
@@ -10,7 +10,10 @@ import (
 )
 
 type SoftmaxLayer struct {
-	axis int
+	axis   int
+	bottom []string
+	top    []string
+	name   string
 }
 
 func NewSoftmaxLayer(param *pb.V1LayerParameter) (Layer, error) {
@@ -20,9 +23,12 @@ func NewSoftmaxLayer(param *pb.V1LayerParameter) (Layer, error) {
 		axis = int(softParam.GetAxis())
 	}
 
-	log.Println("softmax axis", axis)
-
-	return &SoftmaxLayer{axis: axis}, nil
+	return &SoftmaxLayer{
+		axis:   axis,
+		bottom: param.GetBottom(),
+		top:    param.GetTop(),
+		name:   param.GetName(),
+	}, nil
 }
 
 func (soft *SoftmaxLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
@@ -30,71 +36,52 @@ func (soft *SoftmaxLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 
 	// set up scale
 	shape := bottom[0].Shape()
+	if len(shape) != 4 {
+		return nil, errors.New("not implement")
+	}
+
 	axis := soft.axis
 	if soft.axis < 0 {
 		axis += len(shape)
 	}
 	shape[axis] = 1
-	scale, err := blob.New(shape)
-	if err != nil {
-		return nil, err
-	}
 
-	if len(shape) != 4 {
-		return nil, errors.New("not implement")
-	}
-	// init scale
-	for n := 0; n < shape[0]; n++ {
-		for c := 0; c < shape[1]; c++ {
-			for h := 0; h < shape[2]; h++ {
-				for w := 0; w < shape[3]; w++ {
-					idx := []int{n, c, h, w}
-					scale.Set(idx, top.Get(idx, blob.ToData), blob.ToData)
-				}
-			}
+	idx := make([]int, 4)
+	for i := 0; i < len(shape); i++ {
+		idx[i] = int(shape[i])
+		if i > axis {
+			idx[i] = 0
 		}
 	}
 
-	// get scale max
-	for n := 0; n < top.Num(); n++ {
-		for c := 0; c < top.Channels(); c++ {
-			for h := 0; h < top.Height(); h++ {
-				for w := 0; w < top.Width(); w++ {
-					idx := []int{n, c, h, w}
-					sIdx := []int{n, c, h, w}
-					sIdx[axis] = 0
-					v1 := scale.Get(sIdx, blob.ToData)
-					v2 := top.Get(idx, blob.ToData)
-					scale.Set(sIdx, math.Max(v1, v2), blob.ToData)
-				}
-			}
-		}
-	}
+	log.Println("axis", axis)
+	log.Println(top.DataString())
 
-	// subtract scale max and summary the data
 	var sum float64
-	for n := 0; n < top.Num(); n++ {
-		for c := 0; c < top.Channels(); c++ {
-			for h := 0; h < top.Height(); h++ {
-				for w := 0; w < top.Width(); w++ {
-					idx := []int{n, c, h, w}
-					sIdx := []int{n, c, h, w}
-					sIdx[axis] = 0
-					v1 := scale.Get(sIdx, blob.ToData)
-					v2 := top.Get(idx, blob.ToData)
-					top.Set(idx, v2-v1, blob.ToData)
-					sum += math.Exp(v2 - v1)
-				}
-			}
+	for i := axis; i < len(shape); i++ {
+		for v := 0; v < int(shape[i]); v++ {
+			idx[i] = v
+			val := top.Get(idx)
+			log.Println(idx, val, math.Exp(val))
+			sum += math.Exp(val)
 		}
 	}
+	log.Println("sum", sum)
 
-	top.Exp(blob.ToData)
-	top.Scale(1/sum, blob.ToData)
+	top.Exp()
+	top.Scale(1 / sum)
 
 	return []*blob.Blob{top}, nil
 }
 
 func (soft *SoftmaxLayer) Type() string {
-	return "Softmax"
+	return soft.name
+}
+
+func (soft *SoftmaxLayer) Bottom() []string {
+	return soft.bottom
+}
+
+func (soft *SoftmaxLayer) Top() []string {
+	return soft.top
 }

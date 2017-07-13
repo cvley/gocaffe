@@ -16,16 +16,18 @@ type LrnLayer struct {
 	alpha  float64
 	beta   float64
 	k      float64
+	bottom []string
+	top    []string
+	name   string
 }
 
 func NewLRNLayer(params *pb.V1LayerParameter) (Layer, error) {
-	log.Println("construct LRN layer")
-
 	param := params.GetLrnParam()
 	if param == nil {
 		return nil, errors.New("get LRN parameters fail")
 	}
 
+	name := params.GetName()
 	size := param.GetLocalSize()
 	if size%2 == 0 {
 		return nil, errors.New("LRN only supports odd values for local size.")
@@ -42,6 +44,9 @@ func NewLRNLayer(params *pb.V1LayerParameter) (Layer, error) {
 		alpha:  alpha,
 		beta:   beta,
 		k:      k,
+		bottom: params.GetBottom(),
+		top:    params.GetTop(),
+		name:   name,
 	}, nil
 }
 
@@ -63,18 +68,26 @@ func (lrn *LrnLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 }
 
 func (lrn *LrnLayer) Type() string {
-	return "LRN"
+	return lrn.name
+}
+
+func (lrn *LrnLayer) Bottom() []string {
+	return lrn.bottom
+}
+
+func (lrn *LrnLayer) Top() []string {
+	return lrn.top
 }
 
 func (lrn *LrnLayer) crossChannelForward(bottom []*blob.Blob) ([]*blob.Blob, error) {
-	scaleData, err := blob.Init(bottom[0].Shape(), lrn.k, blob.ToData)
+	scaleData, err := blob.Init(bottom[0].Shape(), lrn.k)
 	if err != nil {
 		return nil, err
 	}
 
-	paddedSquare, err := blob.New([]int{
+	paddedSquare, err := blob.New([]int64{
 		bottom[0].Num(),
-		bottom[0].Channels() + lrn.size - 1,
+		bottom[0].Channels() + int64(lrn.size) - 1,
 		bottom[0].Height(),
 		bottom[0].Width(),
 	})
@@ -89,85 +102,82 @@ func (lrn *LrnLayer) crossChannelForward(bottom []*blob.Blob) ([]*blob.Blob, err
 	alphaOverSize := lrn.alpha / float64(lrn.size)
 
 	// go through the images
-	for n := 0; n < bottom[0].Num(); n++ {
+	for n := 0; n < int(bottom[0].Num()); n++ {
 		// compute the padded square
 		imBlob, err := bottom[0].Range(
-			[]int{n, channels, height, width},
-			[]int{n + 1, channels, height, width},
-			blob.ToData,
+			[]int{n, int(channels), int(height), int(width)},
+			[]int{n + 1, int(channels), int(height), int(width)},
 		)
 		if err != nil {
 			return nil, err
 		}
 
-		sqrBlob, err := imBlob.Dot(imBlob, blob.ToData)
+		sqrBlob, err := imBlob.Dot(imBlob)
 		if err != nil {
 			return nil, err
 		}
-		paddedSquare.SetNumChannel(0, n+lrn.prePad, sqrBlob, blob.ToData)
+		paddedSquare.SetNumChannel(0, n+lrn.prePad, sqrBlob)
 
 		// create the first channel scale
 		for c := 0; c < lrn.size; c++ {
 			cBlob, err := paddedSquare.Range(
-				[]int{n, c, height, width},
-				[]int{n, c + 1, height, width},
-				blob.ToData,
+				[]int{n, c, int(height), int(width)},
+				[]int{n, c + 1, int(height), int(width)},
 			)
 			if err != nil {
 				return nil, err
 			}
-			cBlob.Scale(alphaOverSize, blob.ToData)
-			if err := scaleData.SetNumChannel(n, 0, cBlob, blob.ToData); err != nil {
+			cBlob.Scale(alphaOverSize)
+			if err := scaleData.SetNumChannel(n, 0, cBlob); err != nil {
 				return nil, err
 			}
 		}
 
-		for c := 1; c < channels; c++ {
+		for c := 1; c < int(channels); c++ {
 			// copy previous scale
 			cBlob, err := scaleData.Range(
-				[]int{n, c - 1, height, width},
-				[]int{n, c, height, width},
-				blob.ToData,
+				[]int{n, c - 1, int(height), int(width)},
+				[]int{n, c, int(height), int(width)},
 			)
-			if err := scaleData.SetNumChannel(n, c, cBlob, blob.ToData); err != nil {
+			if err := scaleData.SetNumChannel(n, c, cBlob); err != nil {
 				return nil, err
 			}
 			// add head
 			hBlob, err := paddedSquare.Range(
-				[]int{0, c + lrn.size - 1, height, width},
-				[]int{0, c + lrn.size, height, width},
-				blob.ToData,
+				[]int{0, c + lrn.size - 1, int(height), int(width)},
+				[]int{0, c + lrn.size, int(height), int(width)},
 			)
 			if err != nil {
 				return nil, err
 			}
-			hBlob.Scale(alphaOverSize, blob.ToData)
-			if err := cBlob.Add(hBlob, blob.ToData); err != nil {
+			hBlob.Scale(alphaOverSize)
+			if err := cBlob.Add(hBlob); err != nil {
 				return nil, err
 			}
 			// subtract tail
 			tBlob, err := paddedSquare.Range(
-				[]int{0, c - 1, height, width},
-				[]int{0, c, height, width},
-				blob.ToData,
+				[]int{0, c - 1, int(height), int(width)},
+				[]int{0, c, int(height), int(width)},
 			)
-			tBlob.Scale(-alphaOverSize, blob.ToData)
-			if err := cBlob.Add(tBlob, blob.ToData); err != nil {
+			tBlob.Scale(-alphaOverSize)
+			if err := cBlob.Add(tBlob); err != nil {
 				return nil, err
 			}
 
-			if err := scaleData.SetNumChannel(n, c, cBlob, blob.ToData); err != nil {
+			if err := scaleData.SetNumChannel(n, c, cBlob); err != nil {
 				return nil, err
 			}
 		}
 	}
 
 	// compute output
-	scaleData.Powx(-lrn.beta, blob.ToData)
-	top, err := bottom[0].Dot(scaleData, blob.ToData)
+	scaleData.Powx(-lrn.beta)
+	top, err := bottom[0].Dot(scaleData)
 	if err != nil {
 		return nil, err
 	}
+
+	log.Println(lrn.Type(), bottom[0].Shape(), "->", top.Shape())
 
 	return []*blob.Blob{top}, nil
 }
@@ -241,5 +251,11 @@ func (lrn *LrnLayer) withinChannelForward(bottom []*blob.Blob) ([]*blob.Blob, er
 
 	productInput := []*blob.Blob{splitBlobs[1]}
 	productInput = append(productInput, powerOutput...)
-	return productLayer.Forward(productInput)
+	top, err := productLayer.Forward(productInput)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Println(lrn.Type(), bottom[0].Shape(), "->", top[0].Shape())
+	return top, nil
 }

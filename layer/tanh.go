@@ -7,25 +7,33 @@ import (
 	pb "github.com/cvley/gocaffe/proto"
 )
 
-type TanHLayer struct{}
-
-func NewTanHLayer(param *pb.V1LayerParameter) (Layer, error) {
-	return &TanHLayer{}, nil
+type TanHLayer struct {
+	bottom []string
+	top    []string
+	name string
 }
 
-func (*TanHLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
+func NewTanHLayer(param *pb.V1LayerParameter) (Layer, error) {
+	return &TanHLayer{
+		bottom: param.GetBottom(),
+		top:    param.GetTop(),
+		name: param.GetName(),
+	}, nil
+}
+
+func (t *TanHLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 	top, err := blob.New(bottom[0].Shape())
 	if err != nil {
 		return nil, err
 	}
 
-	for n := 0; n < bottom[0].Num(); n++ {
-		for c := 0; c < bottom[0].Channels(); c++ {
-			for h := 0; h < bottom[0].Height(); h++ {
-				for w := 0; w < bottom[0].Width(); w++ {
+	for n := 0; n < int(bottom[0].Num()); n++ {
+		for c := 0; c < int(bottom[0].Channels()); c++ {
+			for h := 0; h < int(bottom[0].Height()); h++ {
+				for w := 0; w < int(bottom[0].Width()); w++ {
 					idx := []int{n, c, h, w}
-					v := bottom[0].Get(idx, blob.ToData)
-					top.Set(idx, tanH(v), blob.ToData)
+					v := bottom[0].Get(idx)
+					top.Set(idx, tanH(v))
 				}
 			}
 		}
@@ -34,8 +42,16 @@ func (*TanHLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 	return []*blob.Blob{top}, nil
 }
 
-func (*TanHLayer) Type() string {
-	return "TanH"
+func (t *TanHLayer) Type() string {
+	return t.name
+}
+
+func (t *TanHLayer) Bottom() []string {
+	return t.bottom
+}
+
+func (t *TanHLayer) Top() []string {
+	return t.top
 }
 
 func tanH(x float64) float64 {

@@ -43,7 +43,7 @@ func (p *PowerLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 		if p.power != 0 {
 			v = math.Pow(p.shift, p.power)
 		}
-		top, err := blob.Init(bottom[0].Shape(), v, blob.ToData)
+		top, err := blob.Init(bottom[0].Shape(), v)
 		if err != nil {
 			return nil, err
 		}
@@ -53,13 +53,13 @@ func (p *PowerLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 
 	top := bottom[0].Copy()
 	if p.scale != 1 {
-		top.Scale(p.scale, blob.ToData)
+		top.Scale(p.scale)
 	}
 	if p.shift != 0 {
-		top.Shift(p.shift, blob.ToData)
+		top.Shift(p.shift)
 	}
 	if p.power != 1 {
-		top.Powx(p.power, blob.ToData)
+		top.Powx(p.power)
 	}
 
 	return []*blob.Blob{top}, nil

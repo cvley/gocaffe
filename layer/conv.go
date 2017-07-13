@@ -17,18 +17,17 @@ type convolutionParam struct {
 
 // ConvLayer implement convolution layer struct.
 type ConvLayer struct {
-	Bottom []string
-	Top    []string
+	bottom []string
+	top    []string
 
 	ConvParam *pb.ConvolutionParameter
 
 	param *convolutionParam
 
-	numOutput int
-	group     int
-	axis      int
+	numOutput int64
 	weight    *blob.Blob
 	bias      *blob.Blob
+	name      string
 }
 
 // NewConvolutionLayer implements the convolution layer construction from
@@ -38,6 +37,8 @@ func NewConvolutionLayer(param *pb.V1LayerParameter) (*ConvLayer, error) {
 	if convParam == nil {
 		return nil, errors.New("no convolution parameters")
 	}
+
+	name := param.GetName()
 
 	//TODO: compatibility
 	blobprotos := param.GetBlobs()
@@ -55,7 +56,6 @@ func NewConvolutionLayer(param *pb.V1LayerParameter) (*ConvLayer, error) {
 			}
 		}
 		log.Printf("length of weight: %d", weight.Capacity())
-
 	}
 
 	cParam := &convolutionParam{
@@ -68,29 +68,40 @@ func NewConvolutionLayer(param *pb.V1LayerParameter) (*ConvLayer, error) {
 	for _, v := range convParam.GetPad() {
 		cParam.pad = append(cParam.pad, int(v))
 	}
+	if len(cParam.pad) == 0 {
+		cParam.pad = []int{0}
+	}
 
 	for _, v := range convParam.GetKernelSize() {
 		cParam.kernel = append(cParam.kernel, int(v))
+	}
+	if len(cParam.kernel) == 0 {
+		cParam.kernel = []int{0}
 	}
 
 	for _, v := range convParam.GetStride() {
 		cParam.stride = append(cParam.stride, int(v))
 	}
+	if len(cParam.stride) == 0 {
+		cParam.stride = []int{1}
+	}
 
 	for _, v := range convParam.GetDilation() {
 		cParam.dilation = append(cParam.dilation, int(v))
 	}
+	if len(cParam.dilation) == 0 {
+		cParam.dilation = []int{1}
+	}
 
 	convLayer := &ConvLayer{
-		Bottom:    param.GetBottom(),
-		Top:       param.GetTop(),
+		bottom:    param.GetBottom(),
+		top:       param.GetTop(),
 		ConvParam: convParam,
-		numOutput: int(convParam.GetNumOutput()),
-		group:     int(convParam.GetGroup()),
+		numOutput: int64(convParam.GetNumOutput()),
 		param:     cParam,
-		axis:      int(convParam.GetAxis()),
 		weight:    weight,
 		bias:      bias,
+		name:      name,
 	}
 
 	return convLayer, nil
@@ -117,7 +128,15 @@ func (conv *ConvLayer) Backward(bottom, top []*blob.Blob, propagateDown []bool) 
 
 // Type of Layer
 func (conv *ConvLayer) Type() string {
-	return "ConvolutionLayer"
+	return conv.name
+}
+
+func (conv *ConvLayer) Bottom() []string {
+	return conv.bottom
+}
+
+func (conv *ConvLayer) Top() []string {
+	return conv.top
 }
 
 func (conv *ConvLayer) forward(bottom *blob.Blob) (*blob.Blob, error) {
@@ -128,7 +147,9 @@ func (conv *ConvLayer) forward(bottom *blob.Blob) (*blob.Blob, error) {
 	}
 
 	// bias
-	convBlob.Add(conv.bias, blob.ToData)
+	convBlob.Add(conv.bias)
+
+	log.Println(conv.Type(), bottom.Shape(), "->", convBlob.Shape())
 
 	return convBlob, nil
 }
@@ -142,18 +163,18 @@ func (conv *ConvLayer) conv(data *blob.Blob) (*blob.Blob, error) {
 	outH := conv.param.getOutputH(height)
 	outW := conv.param.getOutputW(width)
 
-	shape := []int{data.Num(), conv.numOutput, outH, outW}
+	shape := []int64{data.Num(), conv.numOutput, outH, outW}
 	result, err := blob.New(shape)
 	if err != nil {
 		return nil, err
 	}
 
 	// TODO: simple and naive
-	for n := 0; n < num; n++ {
-		for o := 0; o < conv.numOutput; o++ {
-			for c := 0; c < channels; c++ {
-				for h := 0; h < outH; h++ {
-					for w := 0; w < outW; w++ {
+	for n := 0; n < int(num); n++ {
+		for o := 0; o < int(conv.numOutput); o++ {
+			for c := 0; c < int(channels); c++ {
+				for h := 0; h < int(outH); h++ {
+					for w := 0; w < int(outW); w++ {
 						sH, eH := conv.param.rangeH(h)
 						sW, eW := conv.param.rangeW(w)
 						var sum float64
@@ -162,10 +183,10 @@ func (conv *ConvLayer) conv(data *blob.Blob) (*blob.Blob, error) {
 								if y < 0 || x < 0 {
 									continue
 								}
-								sum += data.Get([]int{n, c, y, x}, blob.ToData) * conv.weight.Get([]int{n, o, y, x}, blob.ToData)
+								sum += data.Get([]int{n, c, y, x}) * conv.weight.Get([]int{n, o, y, x})
 							}
 						}
-						result.Set([]int{n, o, h, w}, sum, blob.ToData)
+						result.Set([]int{n, o, h, w}, sum)
 					}
 				}
 			}
@@ -175,12 +196,13 @@ func (conv *ConvLayer) conv(data *blob.Blob) (*blob.Blob, error) {
 	return result, nil
 }
 
-func (c *convolutionParam) getOutputH(h int) int {
-	return (h+c.pad[0]*2-(c.dilation[0]*(c.kernel[0]-1)+1))/c.stride[0] + 1
+func (c *convolutionParam) getOutputH(h int64) int64 {
+	return (h+int64(c.pad[0])*2-(int64(c.dilation[0])*(int64(c.kernel[0])-1)+1))/int64(c.stride[0]) + 1
 }
 
-func (c *convolutionParam) getOutputW(w int) int {
-	return (w+c.pad[1]*2-(c.dilation[1]*(c.kernel[1]-1)+1))/c.stride[1] + 1
+func (c *convolutionParam) getOutputW(w int64) int64 {
+	// TODO
+	return (w+int64(c.pad[0])*2-(int64(c.dilation[0])*(int64(c.kernel[0])-1)+1))/int64(c.stride[0]) + 1
 }
 
 func (c *convolutionParam) rangeH(h int) (int, int) {
@@ -189,6 +211,6 @@ func (c *convolutionParam) rangeH(h int) (int, int) {
 }
 
 func (c *convolutionParam) rangeW(w int) (int, int) {
-	r := (c.dilation[1]*(c.kernel[1]-1) + 1) / 2
+	r := (c.dilation[0]*(c.kernel[0]-1) + 1) / 2
 	return w - r, w + r
 }

@@ -10,6 +10,9 @@ import (
 type DropoutLayer struct {
 	threshold float64
 	scale     float64
+	bottom    []string
+	top       []string
+	name      string
 }
 
 func NewDropoutLayer(param *pb.V1LayerParameter) (Layer, error) {
@@ -27,19 +30,26 @@ func NewDropoutLayer(param *pb.V1LayerParameter) (Layer, error) {
 	return &DropoutLayer{
 		threshold: threshold,
 		scale:     scale,
+		bottom:    param.GetBottom(),
+		top:       param.GetTop(),
+		name:      param.GetName(),
 	}, nil
 }
 
 func (drop *DropoutLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 	// training phase use bernoulli random number generator
-	//randVec, err := blob.New(bottom[0].Shape())
-	//if err != nil {
-	//	return nil, err
-	//}
 	// test phase just return bottom
 	return bottom, nil
 }
 
+func (drop *DropoutLayer) Bottom() []string {
+	return drop.bottom
+}
+
+func (drop *DropoutLayer) Top() []string {
+	return drop.top
+}
+
 func (drop *DropoutLayer) Type() string {
-	return "Dropout"
+	return drop.name
 }

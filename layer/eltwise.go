@@ -41,12 +41,12 @@ func NewEltwiseLayer(param *pb.V1LayerParameter) (*EltwiseLayer, error) {
 func (elt *EltwiseLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 	switch elt.op {
 	case pb.EltwiseParameter_PROD:
-		top, err := bottom[0].Dot(bottom[1], blob.ToData)
+		top, err := bottom[0].Dot(bottom[1])
 		if err != nil {
 			return nil, err
 		}
 		for i := 2; i < len(bottom); i++ {
-			top, err = top.Dot(bottom[i], blob.ToData)
+			top, err = top.Dot(bottom[i])
 			if err != nil {
 				return nil, err
 			}
@@ -59,19 +59,19 @@ func (elt *EltwiseLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 		if err != nil {
 			return nil, err
 		}
-		for n := 0; n < bottom[0].Num(); n++ {
-			for c := 0; c < bottom[0].Channels(); c++ {
-				for h := 0; h < bottom[0].Height(); h++ {
-					for w := 0; w < bottom[0].Width(); w++ {
+		for n := 0; n < int(bottom[0].Num()); n++ {
+			for c := 0; c < int(bottom[0].Channels()); c++ {
+				for h := 0; h < int(bottom[0].Height()); h++ {
+					for w := 0; w < int(bottom[0].Width()); w++ {
 						index := coeffs.Offset([]int{n, c, h, w})
-						coeffs.Set([]int{n, c, h, w}, elt.coeffs[index], blob.ToData)
+						coeffs.Set([]int{n, c, h, w}, elt.coeffs[index])
 					}
 				}
 			}
 		}
 		top := make([]*blob.Blob, len(bottom))
 		for i, v := range bottom {
-			result, err := v.Dot(coeffs, blob.ToData)
+			result, err := v.Dot(coeffs)
 			if err != nil {
 				return nil, err
 			}
@@ -81,27 +81,27 @@ func (elt *EltwiseLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 		return top, nil
 
 	case pb.EltwiseParameter_MAX:
-		mask, err := blob.Init(bottom[0].Shape(), -1, blob.ToData)
+		mask, err := blob.Init(bottom[0].Shape(), -1)
 		if err != nil {
 			return nil, err
 		}
-		top, err := blob.Init(bottom[0].Shape(), -math.MaxFloat64, blob.ToData)
+		top, err := blob.Init(bottom[0].Shape(), -math.MaxFloat64)
 		if err != nil {
 			return nil, err
 		}
-		for n := 0; n < bottom[0].Num(); n++ {
-			for c := 0; c < bottom[0].Channels(); c++ {
-				for h := 0; h < bottom[0].Height(); h++ {
-					for w := 0; w < bottom[0].Width(); w++ {
+		for n := 0; n < int(bottom[0].Num()); n++ {
+			for c := 0; c < int(bottom[0].Channels()); c++ {
+				for h := 0; h < int(bottom[0].Height()); h++ {
+					for w := 0; w < int(bottom[0].Width()); w++ {
 						idxs := []int{n, c, h, w}
-						data0 := bottom[0].Get(idxs, blob.ToData)
-						data1 := bottom[1].Get(idxs, blob.ToData)
+						data0 := bottom[0].Get(idxs)
+						data1 := bottom[1].Get(idxs)
 						if data0 > data1 {
-							top.Set(idxs, data0, blob.ToData)
-							mask.Set(idxs, 0, blob.ToData)
+							top.Set(idxs, data0)
+							mask.Set(idxs, 0)
 						} else {
-							top.Set(idxs, data1, blob.ToData)
-							mask.Set(idxs, 1, blob.ToData)
+							top.Set(idxs, data1)
+							mask.Set(idxs, 1)
 						}
 					}
 				}
@@ -109,16 +109,16 @@ func (elt *EltwiseLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 		}
 
 		for i := 2; i < len(bottom); i++ {
-			for n := 0; n < bottom[0].Num(); n++ {
-				for c := 0; c < bottom[0].Channels(); c++ {
-					for h := 0; h < bottom[0].Height(); h++ {
-						for w := 0; w < bottom[0].Width(); w++ {
+			for n := 0; n < int(bottom[0].Num()); n++ {
+				for c := 0; c < int(bottom[0].Channels()); c++ {
+					for h := 0; h < int(bottom[0].Height()); h++ {
+						for w := 0; w < int(bottom[0].Width()); w++ {
 							idxs := []int{n, c, h, w}
-							data0 := bottom[i].Get(idxs, blob.ToData)
-							data1 := top.Get(idxs, blob.ToData)
+							data0 := bottom[i].Get(idxs)
+							data1 := top.Get(idxs)
 							if data0 > data1 {
-								top.Set(idxs, data0, blob.ToData)
-								mask.Set(idxs, float64(i), blob.ToData)
+								top.Set(idxs, data0)
+								mask.Set(idxs, float64(i))
 							}
 						}
 					}
