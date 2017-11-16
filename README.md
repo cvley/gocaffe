@@ -1,5 +1,8 @@
-# gocaffe
-implement Caffe deep learning framework in pure golang, still in progress.
+## gocaffe
+
+Note: this is just a **Toy** project! Just for fun and learning.
+
+Implement Caffe deep learning framework in pure golang, still in progress.
 
 ### Using protocol buffers with Go
 
@@ -13,7 +16,3 @@ protoc --go_out=. *.proto
 
 The generated files will be `suffixed.pb.go`. Refer to [golang
 protobuf](https://github.com/golang/protobuf) for more information.
-
-### Using Gonum BLAS
-
-More information can be found in [blas](https://github.com/gonum/blas).
