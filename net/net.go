@@ -144,7 +144,7 @@ func (net *Net) ForwardFromTo(bottom []*blob.Blob, end int) (top []*blob.Blob, e
 	}
 
 	for i, l := range net.layers {
-		log.Println("process from", l.Bottom()[0], "to", l.Top()[0], i)
+		log.Println("process", l.Type(), "from [", l.Bottom()[0], "] to [", l.Top()[0], "]", i)
 		top, err = l.Forward(bottom)
 		if err != nil {
 			return nil, fmt.Errorf("layer forward %s %s %s", l.Type(), l.Bottom()[0], err)

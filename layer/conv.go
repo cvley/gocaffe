@@ -121,11 +121,6 @@ func (conv *ConvLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 	return top, nil
 }
 
-// Backward implement the gradient update
-func (conv *ConvLayer) Backward(bottom, top []*blob.Blob, propagateDown []bool) {
-	// not implement yet, only forward is enough
-}
-
 // Type of Layer
 func (conv *ConvLayer) Type() string {
 	return conv.name
@@ -140,14 +135,13 @@ func (conv *ConvLayer) Top() []string {
 }
 
 func (conv *ConvLayer) forward(bottom *blob.Blob) (*blob.Blob, error) {
+	log.Println("conv", conv.weight.String(), conv.bias.String())
+
 	// convolution
 	convBlob, err := conv.conv(bottom)
 	if err != nil {
 		return nil, err
 	}
-
-	// bias
-	convBlob.Add(conv.bias)
 
 	log.Println(conv.Type(), bottom.Shape(), "->", convBlob.Shape())
 
@@ -172,22 +166,22 @@ func (conv *ConvLayer) conv(data *blob.Blob) (*blob.Blob, error) {
 	// TODO: simple and naive
 	for n := 0; n < int(num); n++ {
 		for o := 0; o < int(conv.numOutput); o++ {
-			for c := 0; c < int(channels); c++ {
-				for h := 0; h < int(outH); h++ {
-					for w := 0; w < int(outW); w++ {
-						sH, eH := conv.param.rangeH(h)
-						sW, eW := conv.param.rangeW(w)
-						var sum float64
-						for y := sH; y < eH; y++ {
-							for x := sW; x < eW; x++ {
-								if y < 0 || x < 0 {
-									continue
-								}
-								sum += data.Get([]int{n, c, y, x}) * conv.weight.Get([]int{n, o, y, x})
+			for h := 0; h < int(outH); h++ {
+				for w := 0; w < int(outW); w++ {
+					sH, eH := conv.param.rangeH(h)
+					sW, eW := conv.param.rangeW(w)
+					var sum float64
+					for y := sH; y <= eH; y++ {
+						for x := sW; x <= eW; x++ {
+							if y < 0 || x < 0 || y >= int(height) || x >= int(width) {
+								continue
+							}
+							for c := 0; c < int(channels); c++ {
+								sum += data.Get([]int{n, c, y, x}) * conv.weight.Get([]int{o, c, y, x})
 							}
 						}
-						result.Set([]int{n, o, h, w}, sum)
 					}
+					result.Set([]int{n, o, h, w}, sum+conv.bias.Get([]int{0, 0, 0, o}))
 				}
 			}
 		}

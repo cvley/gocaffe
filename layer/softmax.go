@@ -33,6 +33,7 @@ func NewSoftmaxLayer(param *pb.V1LayerParameter) (Layer, error) {
 
 func (soft *SoftmaxLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 	top := bottom[0].Copy()
+	log.Println("soft", top.DataString())
 
 	// set up scale
 	shape := bottom[0].Shape()
@@ -40,33 +41,33 @@ func (soft *SoftmaxLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, error) {
 		return nil, errors.New("not implement")
 	}
 
-	axis := soft.axis
-	if soft.axis < 0 {
-		axis += len(shape)
-	}
-
-	idx := make([]int, 4)
-	for i := 0; i < len(shape); i++ {
-		idx[i] = int(shape[i])
-		if i > axis {
-			idx[i] = 0
+	var max float64
+	for v := 0; v < int(shape[3]); v++ {
+		idx := []int{1, 1, 1, v}
+		val := top.Get(idx)
+		if val > max {
+			max = val
+			log.Println(max, idx)
 		}
 	}
-
-	log.Println("axis", axis)
-	log.Println(top.DataString())
 
 	var sum float64
-	for i := axis; i < len(shape); i++ {
-		for v := 0; v < int(shape[i]); v++ {
-			idx[i] = v
-			val := top.Get(idx)
-			sum += math.Exp(val)
-		}
+	for v := 0; v < int(shape[3]); v++ {
+		idx := []int{1, 1, 1, v}
+		val := top.Get(idx)
+		sum += math.Exp(val/max-1)
 	}
 
-	top.Exp()
-	top.Scale(1 / sum)
+	log.Println("Sum", sum, max)
+
+	for v := 0; v < int(shape[3]); v++ {
+		idx := []int{1, 1, 1, v}
+		val := top.Get(idx)
+		exp := math.Exp(val/max-1) / sum
+		top.Set(idx, exp)
+	}
+
+	log.Println(top.DataString())
 
 	return []*blob.Blob{top}, nil
 }

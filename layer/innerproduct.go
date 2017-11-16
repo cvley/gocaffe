@@ -97,8 +97,6 @@ func (inner *InnerProductLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, erro
 		return nil, err
 	}
 
-	log.Println("MMul top shape", top.Shape())
-
 	if inner.biasTerm {
 		// bias shape [1, 1, 1, inner.n]
 		biasMultiplier, err := blob.Init([]int64{1, 1, M, 1}, 1)
@@ -112,6 +110,10 @@ func (inner *InnerProductLayer) Forward(bottom []*blob.Blob) ([]*blob.Blob, erro
 		if err := top.Add(mbias); err != nil {
 			return nil, err
 		}
+	}
+
+	if inner.Type() == "fc8" {
+		log.Println("MMul top", top.DataString())
 	}
 
 	log.Println(inner.Type(), bottom[0].Shape(), "->", top.Shape())

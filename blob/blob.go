@@ -38,8 +38,11 @@ func New(shape []int64) (*Blob, error) {
 
 	cap := int64(1)
 	for _, v := range shape {
-		if v <= 0 {
+		if v < 0 {
 			return nil, ErrInvalidShape
+		}
+		if v == 0 {
+			continue
 		}
 		cap *= v
 	}
@@ -203,6 +206,9 @@ func (b *Blob) Offset(indices []int) int {
 
 	var offset int
 	for i := 0; i < b.AxesNum(); i++ {
+		if b.shape[i] == 0 {
+			continue
+		}
 		offset *= int(b.shape[i])
 		if len(indices) > i {
 			if indices[i] > 0 && indices[i] < int(b.shape[i]) {
@@ -226,7 +232,7 @@ func (b *Blob) Range(indices1, indices2 []int) (*Blob, error) {
 	for i, v := range indices1 {
 		shape[i] = int64(indices2[i] - v)
 		if shape[i] == 0 {
-			shape[i] = 1
+			shape[i] = int64(v)
 		}
 	}
 
@@ -235,28 +241,24 @@ func (b *Blob) Range(indices1, indices2 []int) (*Blob, error) {
 		return nil, err
 	}
 
-	for n := indices1[0]; n < indices2[0]; n++ {
-		for c := indices1[1]; c < indices2[1]; c++ {
-			for h := indices1[2]; h < indices2[2]; h++ {
-				for w := indices1[3]; w < indices2[3]; w++ {
-					idx := []int{n, c, h, w}
-					result.Set(idx, b.Get(idx))
-				}
-			}
-		}
-	}
+	idx1 := b.Offset(indices1)
+	idx2 := b.Offset(indices2)
+	log.Println(indices1, indices2, idx1, idx2)
+	copy(result.data, b.data[idx1:idx2])
+
+	log.Println("shape", result.Shape(), len(result.data))
 
 	return result, nil
 }
 
 func (b *Blob) SetNumChannel(index0, index1 int, other *Blob) error {
-	//	if b.Width() != other.Width() || b.Height() != other.Height() {
-	//		return errors.New("set channel fail, mismatch shape")
-	//	}
-
-	if other.Num() != 1 || other.Channels() != 1 {
-		return errors.New("set channel fail, invalid blob")
+	if b.Width() != other.Width() || b.Height() != other.Height() {
+		return errors.New("set channel fail, mismatch shape")
 	}
+
+	//	if other.Num() != 1 || other.Channels() != 1 {
+	//		return errors.New("set channel fail, invalid blob")
+	//	}
 
 	for h := 0; h < int(b.Height()); h++ {
 		for w := 0; w < int(b.Width()); w++ {
@@ -314,9 +316,9 @@ func (b *Blob) Scale(scale float64) {
 
 // Add will add the data by a input blob
 func (b *Blob) Add(other *Blob) error {
-	//	if !b.ShapeEquals(other) {
-	//		return errors.New("blob add data fail, mismatch shape")
-	//	}
+	if !b.ShapeEquals(other) {
+		return errors.New("blob add data fail, mismatch shape")
+	}
 
 	for i := 0; i < int(other.cap); i++ {
 		b.data[i] += other.data[i]
@@ -327,9 +329,9 @@ func (b *Blob) Add(other *Blob) error {
 
 // Dot performs element-wise multiply data by a input blob
 func (b *Blob) Dot(other *Blob) (*Blob, error) {
-	//	if !b.ShapeEquals(other) {
-	//		return nil, errors.New("blob add data fail, mismatch shape")
-	//	}
+	if !b.ShapeEquals(other) {
+		return nil, errors.New("blob add data fail, mismatch shape")
+	}
 
 	result, err := New(b.shape)
 	if err != nil {
@@ -345,9 +347,9 @@ func (b *Blob) Dot(other *Blob) (*Blob, error) {
 
 // Mul perform matrix multiply data by a input blob
 func (b *Blob) Mul(other *Blob) (float64, error) {
-	//if !b.ShapeEquals(other) {
-	//	return 0, errors.New("blob add data fail, mismatch shape")
-	//}
+	if !b.ShapeEquals(other) {
+		return 0, errors.New("blob add data fail, mismatch shape")
+	}
 
 	var sum float64
 	for i := 0; i < int(b.cap); i++ {
@@ -373,8 +375,7 @@ func (b *Blob) Exp() {
 
 // Trans perform transpose of matrix
 func (b *Blob) Trans() *Blob {
-	nShape := b.shape
-	nShape[2], nShape[3] = b.shape[3], b.shape[2]
+	nShape := []int64{b.shape[0], b.shape[1], b.shape[3], b.shape[2]}
 	nb, err := New(nShape)
 	if err != nil {
 		panic(err)
@@ -478,6 +479,28 @@ func (b *Blob) Reshape(index []int64) (*Blob, error) {
 	return result, nil
 }
 
+func (b *Blob) Sub(other *Blob) *Blob {
+	if !b.ShapeEquals(other) {
+		panic("mismatch shape in blob Sub function")
+	}
+
+	ret := b.Copy()
+
+	for n := 0; n < int(b.Num()); n++ {
+		for c := 0; c < int(b.Channels()); c++ {
+			for h := 0; h < int(b.Height()); h++ {
+				for w := 0; w < int(b.Width()); w++ {
+					idx := []int{n, c, h, w}
+					v := b.Get(idx) - other.Get(idx)
+					ret.Set(idx, v)
+				}
+			}
+		}
+	}
+
+	return ret
+}
+
 func (b *Blob) DataString() string {
 	var buffer bytes.Buffer
 	buffer.WriteString(fmt.Sprintf("Shape %v\nData ", b.shape))
@@ -491,7 +514,7 @@ func (b *Blob) DataString() string {
 func (b *Blob) GetTop(num int) []Value {
 	vals := []Value{}
 	for i := 0; i < int(b.Width()); i++ {
-		probs := b.Get([]int{1, 1, 1, i})
+		probs := b.Get([]int{0, 0, 0, i})
 		v := Value{Index: i, Probs: probs}
 		vals = append(vals, v)
 	}

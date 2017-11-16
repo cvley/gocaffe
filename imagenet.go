@@ -15,6 +15,7 @@ func main() {
 	deploy := flag.String("deploy", "", "deploy prototxt file")
 	model := flag.String("model", "", "trained model")
 	image := flag.String("image", "", "input image")
+	mean := flag.String("mean", "", "mean file")
 	flag.Parse()
 
 	if *deploy == "" || *model == "" {
@@ -25,6 +26,12 @@ func main() {
 
 	if *image == "" {
 		log.Println("invalid image file")
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	if *mean == "" {
+		log.Println("invalid mean file")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -54,13 +61,14 @@ func main() {
 	}
 
 	height, width := n.GetInputSize()
-	bottom, err := io.ReadImageFile(*image, int(width), int(height))
+	bottom, err := io.ReadImageFile(*image, int(width), int(height), *mean)
 	if err != nil {
 		log.Println(err)
 		os.Exit(1)
 	}
 
 	log.Println(bottom.Shape())
+
 	tops, err := n.Forward([]*blob.Blob{bottom})
 	if err != nil {
 		log.Println("ERROR Forward", err)
